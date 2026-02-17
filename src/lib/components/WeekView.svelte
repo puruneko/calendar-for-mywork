@@ -71,6 +71,72 @@ function handleItemClick(item: CalendarItem) {
   onItemClick?.(item);
 }
 
+// ドラッグ&ドロップ関連の状態
+let draggedItem = $state<CalendarItem | null>(null);
+let draggedOverDay = $state<DateTime | null>(null);
+let draggedOverY = $state<number | null>(null);
+
+// ドラッグ開始
+function handleDragStart(event: DragEvent, item: CalendarItem) {
+  draggedItem = item;
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', item.id);
+  }
+}
+
+// ドラッグ終了
+function handleDragEnd() {
+  draggedItem = null;
+  draggedOverDay = null;
+  draggedOverY = null;
+}
+
+// ドラッグオーバー（日列）
+function handleDayDragOver(event: DragEvent, day: DateTime) {
+  event.preventDefault();
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move';
+  }
+  draggedOverDay = day;
+  
+  // マウスのY座標を取得
+  const target = event.currentTarget as HTMLElement;
+  const rect = target.getBoundingClientRect();
+  draggedOverY = event.clientY - rect.top;
+}
+
+// ドロップ処理
+function handleDrop(event: DragEvent, day: DateTime) {
+  event.preventDefault();
+  
+  if (!draggedItem || !draggedItem.start || !draggedItem.end) return;
+  
+  // ドロップ位置から時刻を計算
+  const target = event.currentTarget as HTMLElement;
+  const rect = target.getBoundingClientRect();
+  const y = event.clientY - rect.top;
+  
+  const hourHeight = 60; // 1時間あたりのピクセル高さ
+  const hoursFromStart = y / hourHeight;
+  const minutesFromStart = hoursFromStart * 60;
+  
+  // 新しい開始日時を計算
+  const newStart = day.startOf('day').set({ hour: startHour }).plus({ minutes: minutesFromStart });
+  
+  // アイテムの期間を維持
+  const duration = draggedItem.end.diff(draggedItem.start, 'minutes').minutes;
+  const newEnd = newStart.plus({ minutes: duration });
+  
+  // イベントを発火
+  onItemMove?.(draggedItem, newStart, newEnd);
+  
+  // 状態をリセット
+  draggedItem = null;
+  draggedOverDay = null;
+  draggedOverY = null;
+}
+
 // 前の週に移動
 function goToPreviousWeek() {
   const newDate = currentDate.minus({ weeks: 1 });
@@ -144,7 +210,11 @@ function getItemClass(item: CalendarItem): string {
         </div>
 
         <!-- 時間グリッド -->
-        <div class="day-grid">
+        <div 
+          class="day-grid"
+          ondragover={(e) => handleDayDragOver(e, day)}
+          ondrop={(e) => handleDrop(e, day)}
+        >
           {#each timeSlots as slot}
             <div class="grid-cell"></div>
           {/each}
@@ -153,8 +223,11 @@ function getItemClass(item: CalendarItem): string {
           <div class="items-container">
             {#each getItemsForDay(day) as item (item.id)}
               <div
-                class={getItemClass(item)}
+                class="{getItemClass(item)} {draggedItem?.id === item.id ? 'dragging' : ''}"
                 style={getItemStyle(item)}
+                draggable="true"
+                ondragstart={(e) => handleDragStart(e, item)}
+                ondragend={handleDragEnd}
                 onclick={() => handleItemClick(item)}
                 onkeydown={(e) => e.key === 'Enter' && handleItemClick(item)}
                 role="button"
@@ -354,5 +427,19 @@ function getItemClass(item: CalendarItem): string {
     font-size: 11px;
     color: #555;
     margin-top: 2px;
+  }
+
+  /* ドラッグ中のスタイル */
+  .calendar-item.dragging {
+    opacity: 0.5;
+    cursor: move;
+  }
+
+  .day-grid {
+    transition: background-color 0.2s;
+  }
+
+  .day-grid:hover {
+    background-color: rgba(33, 150, 243, 0.05);
   }
 </style>
