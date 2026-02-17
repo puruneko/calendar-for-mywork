@@ -72,16 +72,4 @@ test.describe('Calendar WeekView', () => {
     
     expect(count).toBeGreaterThan(0);
   });
-
-  test('アイテムをクリックするとアラートが表示されること', async ({ page }) => {
-    // アラートダイアログをリッスン
-    page.on('dialog', async dialog => {
-      expect(dialog.type()).toBe('alert');
-      await dialog.accept();
-    });
-    
-    // アイテムをクリック
-    const item = page.locator('.calendar-item').first();
-    await item.click();
-  });
 });

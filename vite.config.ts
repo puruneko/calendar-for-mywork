@@ -4,9 +4,9 @@ import { resolve } from "path"
 
 const devPort = 5176
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
     plugins: [svelte()],
-    root: "demo",
+    root: command === 'serve' ? 'demo' : '.',
     server: {
         port: devPort,
         strictPort: true,
@@ -20,6 +20,7 @@ export default defineConfig({
         globals: true,
         environment: "jsdom",
         exclude: ["**/node_modules/**", "**/dist/**", "**/tests/e2e/**"],
+        root: '.',
     },
     build: {
         lib: {
@@ -37,4 +38,4 @@ export default defineConfig({
             },
         },
     },
-})
+}))
