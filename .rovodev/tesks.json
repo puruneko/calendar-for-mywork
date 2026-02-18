@@ -1,0 +1,8 @@
+{
+    "tasks": {
+        "e2e": {
+            "command": "npx",
+            "args": ["playwright", "test"]
+        }
+    }
+}

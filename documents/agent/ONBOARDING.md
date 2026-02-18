@@ -53,29 +53,13 @@
 
 ## 開発の引き継ぎチェックリスト
 
-- [x] COOPERATION_POLICY.mdを読んだ
-- [x] initial_prompt.mdを読んだ
-- [x] 依存関係をインストールした
-- [ ] データモデルを理解した
-- [ ] 基本UIコンポーネントを実装した
-- [ ] テストを作成し、すべてパスした
-- [ ] ブラウザで動作確認した
+- [ ] COOPERATION_POLICY.mdを読んだ
+- [ ] documents配下のドキュメントを全て読んだ
+  - gitにコミットが無い場合は、initial_prompt.mdを読み新プロジェクトの概要を確認してください。コミットがある場合は読まないでください。
 
 ## 次にやるべきこと
 
-1. **データモデルの実装**
-   - `src/lib/models/CalendarItem.ts` - 基底インターフェース
-   - `src/lib/models/Task.ts` - Task定義
-   - `src/lib/models/Appointment.ts` - Appointment定義
-
-2. **1週間表示カレンダーUIの実装**
-   - `src/lib/components/WeekView.svelte` - 週表示コンポーネント
-   - 縦軸で時間表示
-   - グリッド描画
-
-3. **デモアプリの作成**
-   - `demo/index.html` - エントリーポイント
-   - `demo/App.svelte` - デモアプリケーション
+gitのcommitログより確認
 
 ## 重要な制約事項
 
@@ -85,18 +69,6 @@
 - 環境依存のAPI（Node専用等）を使わない
 - 日付計算は必ずLuxonを使用
 
-## テスト実行
-
-```bash
-# 単体テスト
-npm test
-
-# E2Eテスト
-npm run test:e2e
-
-# 開発サーバー
-npm run dev
-```
 
 ## 最終更新
 
