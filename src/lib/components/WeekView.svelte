@@ -119,6 +119,13 @@ function handleResizeStart(event: MouseEvent, item: CalendarItem, edge: 'top' | 
   event.stopPropagation();
   event.preventDefault();
   
+  // 親要素のdraggableを無効化（リサイズ中はドラッグ不可）
+  const target = event.currentTarget as HTMLElement;
+  const parentItem = target.closest('.calendar-item') as HTMLElement;
+  if (parentItem) {
+    parentItem.setAttribute('draggable', 'false');
+  }
+  
   resizingItem = item;
   resizeEdge = edge;
   resizeStartY = event.clientY;
@@ -168,6 +175,12 @@ function handleResizeMove(event: MouseEvent) {
 function handleResizeEnd() {
   document.removeEventListener('mousemove', handleResizeMove);
   document.removeEventListener('mouseup', handleResizeEnd);
+  
+  // すべてのカレンダーアイテムのdraggableを再有効化
+  const allItems = document.querySelectorAll('.calendar-item');
+  allItems.forEach(el => {
+    (el as HTMLElement).setAttribute('draggable', 'true');
+  });
   
   resizingItem = null;
   resizeEdge = null;
@@ -450,21 +463,23 @@ function getItemClass(item: CalendarItem): string {
               <div
                 class="{getItemClass(item)} {draggedItem?.id === item.id ? 'dragging' : ''}"
                 style={getItemStyle(item)}
+                draggable="true"
+                ondragstart={(e) => handleDragStart(e, item)}
+                ondragend={handleDragEnd}
               >
                 <!-- リサイズハンドル（上端） -->
                 <div 
                   class="resize-handle resize-handle-top"
                   onmousedown={(e) => handleResizeStart(e, item, 'top')}
+                  ondragstart={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                  draggable="false"
                   role="slider"
                   aria-label="開始時刻を変更"
                 ></div>
                 
-                <!-- アイテム本体（ドラッグ可能） -->
+                <!-- アイテム本体（クリック可能） -->
                 <div
                   class="item-content"
-                  draggable="true"
-                  ondragstart={(e) => handleDragStart(e, item)}
-                  ondragend={handleDragEnd}
                   onclick={() => handleItemClick(item)}
                   onkeydown={(e) => e.key === 'Enter' && handleItemClick(item)}
                   role="button"
@@ -482,6 +497,8 @@ function getItemClass(item: CalendarItem): string {
                 <div 
                   class="resize-handle resize-handle-bottom"
                   onmousedown={(e) => handleResizeStart(e, item, 'bottom')}
+                  ondragstart={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                  draggable="false"
                   role="slider"
                   aria-label="終了時刻を変更"
                 ></div>
@@ -735,23 +752,25 @@ function getItemClass(item: CalendarItem): string {
     z-index: 5;
   }
 
-  /* リサイズハンドル（既存のスタイル） */
+  /* リサイズハンドル */
   .resize-handle {
     position: absolute;
     left: 0;
     right: 0;
-    height: 8px;
+    height: 12px;
     cursor: ns-resize;
     z-index: 20;
-    pointer-events: auto; /* 追加: リサイズ可能にする */
+    pointer-events: auto;
+    user-select: none;
+    -webkit-user-drag: none;
   }
 
   .resize-handle-top {
-    top: 0;
+    top: -4px;
   }
 
   .resize-handle-bottom {
-    bottom: 0;
+    bottom: -4px;
   }
 
   .resize-handle:hover {
@@ -764,15 +783,15 @@ function getItemClass(item: CalendarItem): string {
     flex: 1;
     overflow: hidden;
     cursor: move;
-    pointer-events: auto; /* ドラッグ可能にする */
+    pointer-events: auto;
   }
   
   .item-content * {
     pointer-events: none; /* 子要素がドラッグを妨げないようにする */
   }
   
-  /* リサイズハンドル */
-  .resize-handle {
-    pointer-events: auto; /* リサイズ可能にする */
+  /* カレンダーアイテム全体をドラッグ可能にする */
+  .calendar-item {
+    cursor: move;
   }
 </style>

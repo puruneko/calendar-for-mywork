@@ -127,8 +127,8 @@ test.describe('DnD機能', () => {
     
     // 各アイテムがdraggable属性を持つことを確認
     for (let i = 0; i < Math.min(count, 3); i++) {
-      const itemContent = items.nth(i).locator('.item-content');
-      const draggable = await itemContent.getAttribute('draggable');
+      const item = items.nth(i);
+      const draggable = await item.getAttribute('draggable');
       expect(draggable).toBe('true');
     }
     
