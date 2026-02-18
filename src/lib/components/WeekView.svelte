@@ -48,6 +48,12 @@ interface Props {
   /** DnD時の日付変更閾値（0.0-1.0、アイテム幅の何%が別の列に入ったら移動とみなすか） */
   dayChangeThreshold?: number;
   
+  /** 土日を表示するかどうか */
+  showWeekend?: boolean;
+  
+  /** 終日イベントを表示するかどうか */
+  showAllDay?: boolean;
+  
   /** 設定変更時のイベントハンドラ */
   onSettingsChange?: (settings: {
     minorTick: number;
@@ -67,6 +73,8 @@ let {
   majorTick = 60,
   minorTick = 15,
   dayChangeThreshold = 0.75,
+  showWeekend = true,
+  showAllDay = true,
   onItemClick,
   onItemMove,
   onItemResize,
@@ -74,8 +82,16 @@ let {
   onSettingsChange,
 }: Props = $props();
 
-// 週の日付リストを取得
-let weekDays = $derived(getWeekDays(currentDate));
+// 週の日付リストを取得（土日表示の設定を反映）
+let weekDays = $derived.by(() => {
+  const allDays = getWeekDays(currentDate);
+  if (showWeekend) {
+    return allDays;
+  } else {
+    // 平日のみ（月〜金）
+    return allDays.filter(day => day.weekday >= 1 && day.weekday <= 5);
+  }
+});
 
 // 時間スロットを生成（majorTick優先、tickIntervalは後方互換性のため）
 let timeSlots = $derived(generateTimeSlots(startHour, endHour, majorTick));
@@ -494,8 +510,8 @@ function getItemClass(item: CalendarItem): string {
       {minorTick}
       {startHour}
       {endHour}
-      showWeekend={true}
-      showAllDay={true}
+      {showWeekend}
+      {showAllDay}
       onClose={toggleSettings}
       onChange={handleSettingsChange}
     />
@@ -762,31 +778,61 @@ function getItemClass(item: CalendarItem): string {
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
   }
 
-  /* Task スタイル */
+  /* Task スタイル - 柔軟で動かしやすいデザイン */
+  .task {
+    background: var(--task-bg, rgba(224, 224, 224, 0.85));
+    border-left: 4px solid #9e9e9e;
+    border-radius: 4px;
+  }
+
   .task.task-todo {
-    background: var(--task-todo-bg, rgba(144, 202, 249, 0.85));
-    border-left: 4px solid #2196f3;
+    background: var(--task-todo-bg, rgba(224, 224, 224, 0.85));
+    border-left: 4px dashed #9e9e9e; /* 破線で未着手を表現 */
   }
 
   .task.task-doing {
-    background: var(--task-doing-bg, rgba(255, 183, 77, 0.85));
-    border-left: 4px solid #ff9800;
+    background: var(--task-doing-bg, rgba(224, 224, 224, 0.85));
+    border-left: 4px solid #9e9e9e; /* 実線で進行中を表現 */
   }
 
   .task.task-done {
-    background: var(--task-done-bg, rgba(165, 214, 167, 0.85));
-    border-left: 4px solid #4caf50;
+    background: var(--task-done-bg, rgba(224, 224, 224, 0.85));
+    border-left: 4px double #9e9e9e; /* 二重線で完了を表現 */
   }
 
   .task.task-undefined {
     background: rgba(224, 224, 224, 0.85);
-    border-left: 4px solid #9e9e9e;
+    border-left: 4px dotted #9e9e9e; /* 点線で未定義を表現 */
   }
 
-  /* Appointment スタイル */
+  /* Appointment スタイル - 固定的で動かしにくいデザイン */
   .appointment {
-    background: var(--appointment-bg, rgba(206, 147, 216, 0.85));
-    border-left: 4px solid #9c27b0;
+    background: var(--appointment-bg, rgba(224, 224, 224, 0.85));
+    border: 2px solid #616161; /* 太い外枠で固定感を表現 */
+    border-radius: 2px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15); /* より強い影で重厚感 */
+  }
+  
+  .appointment:hover {
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.25); /* ホバー時も強めの影 */
+  }
+  
+  /* アポイントメントのカーソルを変更して動かしにくさを表現 */
+  .appointment {
+    cursor: default;
+  }
+  
+  .appointment .item-content {
+    cursor: default;
+  }
+  
+  /* タスクは通常のカーソル */
+  .task {
+    cursor: move;
+  }
+  
+  .task .item-content {
+    cursor: move;
   }
 
   .item-title {

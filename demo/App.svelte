@@ -67,6 +67,8 @@ let currentDate = $state(DateTime.now());
 let startHour = $state(8);
 let endHour = $state(20);
 let minorTick = $state(15);
+let showWeekend = $state(true);
+let showAllDay = $state(true);
 
 // イベントハンドラ
 function handleItemClick(item: CalendarItem) {
@@ -108,6 +110,8 @@ function handleSettingsChange(settings: {
   minorTick = settings.minorTick;
   startHour = settings.startHour;
   endHour = settings.endHour;
+  showWeekend = settings.showWeekend;
+  showAllDay = settings.showAllDay;
 }
 </script>
 
@@ -124,6 +128,8 @@ function handleSettingsChange(settings: {
       {startHour}
       {endHour}
       {minorTick}
+      {showWeekend}
+      {showAllDay}
       tickInterval={60}
       onItemClick={handleItemClick}
       onItemMove={handleItemMove}
