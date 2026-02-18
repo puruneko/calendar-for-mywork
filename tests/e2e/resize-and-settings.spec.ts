@@ -29,12 +29,6 @@ test.describe('リサイズと設定機能のテスト', () => {
     expect(cursor).toBe('ns-resize');
   });
 
-  test.skip('ドラッグプレビューが表示されること', async ({ page }) => {
-    // DnD中のプレビュー表示はdnd.spec.tsでテスト済み
-    // dragToが複雑すぎてタイムアウトするためスキップ
-    expect(true).toBe(true);
-  });
-
   test('設定ボタンが表示されること', async ({ page }) => {
     const settingsButton = page.locator('.settings-button');
     await expect(settingsButton).toBeVisible();

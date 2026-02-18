@@ -176,9 +176,8 @@ function handleResizeEnd() {
 
 // ドラッグ&ドロップ関連の状態
 let draggedItem = $state<CalendarItem | null>(null);
-let draggedItemElement = $state<HTMLElement | null>(null);
-let dragStartX = $state<number>(0);
-let dragStartY = $state<number>(0);
+let draggedOverDay = $state<DateTime | null>(null);
+let draggedOverY = $state<number | null>(null);
 
 // リサイズ関連の状態
 let resizingItem = $state<CalendarItem | null>(null);
@@ -187,45 +186,15 @@ let resizeStartY = $state<number>(0);
 
 // ドラッグプレビュー（移動先の影）のスタイルを計算
 let dragPreviewStyle = $derived.by(() => {
-  if (!draggedItem || !draggedItemElement) return null;
+  if (!draggedItem || !draggedOverDay || draggedOverY === null) return null;
   if (!draggedItem.start || !draggedItem.end) return null;
   
-  const rect = draggedItemElement.getBoundingClientRect();
   const hourHeight = 60;
-  
-  // アイテムの上端のY座標から時刻を計算
-  let targetDay: DateTime | null = null;
-  let targetMinutes = 0;
-  
-  // どの日の列に最も重なっているかを判定
-  const itemCenterX = rect.left + rect.width / 2;
-  const dayColumns = document.querySelectorAll('.day-column');
-  
-  dayColumns.forEach((col, index) => {
-    const colRect = col.getBoundingClientRect();
-    const overlapLeft = Math.max(rect.left, colRect.left);
-    const overlapRight = Math.min(rect.right, colRect.right);
-    const overlapWidth = Math.max(0, overlapRight - overlapLeft);
-    const overlapRatio = overlapWidth / rect.width;
-    
-    if (overlapRatio >= dayChangeThreshold) {
-      targetDay = weekDays[index];
-      
-      // アイテムの上端から時刻を計算
-      const dayGrid = col.querySelector('.day-grid');
-      if (dayGrid) {
-        const gridRect = dayGrid.getBoundingClientRect();
-        const offsetY = rect.top - gridRect.top;
-        const hoursFromStart = offsetY / hourHeight;
-        targetMinutes = hoursFromStart * 60;
-      }
-    }
-  });
-  
-  if (!targetDay) return null;
+  const hoursFromStart = draggedOverY / hourHeight;
+  const minutesFromStart = hoursFromStart * 60;
   
   // 新しい開始位置を計算（minorTick単位にスナップ）
-  const rawStart = targetDay.startOf('day').set({ hour: startHour }).plus({ minutes: targetMinutes });
+  const rawStart = draggedOverDay.startOf('day').set({ hour: startHour }).plus({ minutes: minutesFromStart });
   const newStart = snapToMinorTick(rawStart, minorTick);
   const dayStart = newStart.startOf('day').set({ hour: startHour });
   const top = newStart.diff(dayStart, 'minutes').minutes;
@@ -235,7 +204,7 @@ let dragPreviewStyle = $derived.by(() => {
   const height = duration;
   
   return {
-    day: targetDay,
+    day: draggedOverDay,
     top: (top / 60) * hourHeight,
     height: (height / 60) * hourHeight,
     newStart,
@@ -246,9 +215,6 @@ let dragPreviewStyle = $derived.by(() => {
 // ドラッグ開始
 function handleDragStart(event: DragEvent, item: CalendarItem) {
   draggedItem = item;
-  draggedItemElement = event.currentTarget as HTMLElement;
-  dragStartX = event.clientX;
-  dragStartY = event.clientY;
   
   if (event.dataTransfer) {
     event.dataTransfer.effectAllowed = 'move';
@@ -259,9 +225,8 @@ function handleDragStart(event: DragEvent, item: CalendarItem) {
 // ドラッグ終了
 function handleDragEnd() {
   draggedItem = null;
-  draggedItemElement = null;
-  dragStartX = 0;
-  dragStartY = 0;
+  draggedOverDay = null;
+  draggedOverY = null;
 }
 
 // ドラッグオーバー（日列）
@@ -270,7 +235,12 @@ function handleDayDragOver(event: DragEvent, day: DateTime) {
   if (event.dataTransfer) {
     event.dataTransfer.dropEffect = 'move';
   }
-  // 新しいロジックでは、dragPreviewStyleが自動的にアイテム位置を追跡
+  draggedOverDay = day;
+  
+  // マウスのY座標を取得
+  const target = event.currentTarget as HTMLElement;
+  const rect = target.getBoundingClientRect();
+  draggedOverY = event.clientY - rect.top;
 }
 
 // ドロップ処理
@@ -284,9 +254,8 @@ function handleDrop(event: DragEvent, day: DateTime) {
   
   // 状態をリセット
   draggedItem = null;
-  draggedItemElement = null;
-  dragStartX = 0;
-  dragStartY = 0;
+  draggedOverDay = null;
+  draggedOverY = null;
 }
 
 // 前の週に移動
@@ -443,10 +412,6 @@ function getItemClass(item: CalendarItem): string {
               <div
                 class="{getItemClass(item)} {draggedItem?.id === item.id ? 'dragging' : ''}"
                 style={getItemStyle(item)}
-                onclick={() => handleItemClick(item)}
-                onkeydown={(e) => e.key === 'Enter' && handleItemClick(item)}
-                role="button"
-                tabindex="0"
               >
                 <!-- リサイズハンドル（上端） -->
                 <div 
@@ -462,6 +427,10 @@ function getItemClass(item: CalendarItem): string {
                   draggable="true"
                   ondragstart={(e) => handleDragStart(e, item)}
                   ondragend={handleDragEnd}
+                  onclick={() => handleItemClick(item)}
+                  onkeydown={(e) => e.key === 'Enter' && handleItemClick(item)}
+                  role="button"
+                  tabindex="0"
                 >
                   <div class="item-title">{item.title}</div>
                   {#if item.start && item.end}
@@ -629,7 +598,7 @@ function getItemClass(item: CalendarItem): string {
     border-radius: 4px;
     cursor: pointer;
     pointer-events: auto;
-    overflow: hidden;
+    overflow: visible; /* リサイズハンドルを見えるようにする */
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     display: flex;
     flex-direction: column;
@@ -728,7 +697,7 @@ function getItemClass(item: CalendarItem): string {
     z-index: 5;
   }
 
-  /* リサイズハンドル */
+  /* リサイズハンドル（既存のスタイル） */
   .resize-handle {
     position: absolute;
     left: 0;
@@ -736,6 +705,7 @@ function getItemClass(item: CalendarItem): string {
     height: 8px;
     cursor: ns-resize;
     z-index: 20;
+    pointer-events: auto; /* 追加: リサイズ可能にする */
   }
 
   .resize-handle-top {
@@ -755,5 +725,16 @@ function getItemClass(item: CalendarItem): string {
     padding: 4px 8px;
     flex: 1;
     overflow: hidden;
+    cursor: move;
+    pointer-events: auto; /* ドラッグ可能にする */
+  }
+  
+  .item-content * {
+    pointer-events: none; /* 子要素がドラッグを妨げないようにする */
+  }
+  
+  /* リサイズハンドル */
+  .resize-handle {
+    pointer-events: auto; /* リサイズ可能にする */
   }
 </style>
