@@ -168,7 +168,7 @@ function handleResizeMove(event: MouseEvent) {
   
   // イベントを発火（リアルタイムプレビュー）
   onItemResize?.(resizingItem, newStart, newEnd);
-  resizeStartY = event.clientY;
+  // 注意: resizeStartYは更新しない（累積的な変更を追跡するため）
 }
 
 // リサイズ終了
