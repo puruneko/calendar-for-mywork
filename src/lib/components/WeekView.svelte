@@ -9,6 +9,7 @@
 import { DateTime } from 'luxon';
 import type { CalendarItem } from '../models';
 import { getWeekDays, formatTime, formatWeekday, generateTimeSlots, snapToMinorTick } from '../utils';
+import SettingsModal from './SettingsModal.svelte';
 
 interface Props {
   /** 表示するアイテムリスト */
@@ -104,13 +105,106 @@ function getItemsForDay(day: DateTime): CalendarItem[] {
 
 // アイテムクリックハンドラ
 function handleItemClick(item: CalendarItem) {
+  // リサイズ中はクリックイベントを無視
+  if (resizingItem) return;
   onItemClick?.(item);
+}
+
+// リサイズ開始
+function handleResizeStart(event: MouseEvent, item: CalendarItem, edge: 'top' | 'bottom') {
+  event.stopPropagation();
+  event.preventDefault();
+  
+  resizingItem = item;
+  resizeEdge = edge;
+  resizeStartY = event.clientY;
+  
+  // グローバルマウスイベントをリッスン
+  document.addEventListener('mousemove', handleResizeMove);
+  document.addEventListener('mouseup', handleResizeEnd);
+}
+
+// リサイズ中
+function handleResizeMove(event: MouseEvent) {
+  if (!resizingItem || !resizeEdge || !resizingItem.start || !resizingItem.end) return;
+  
+  const deltaY = event.clientY - resizeStartY;
+  const hourHeight = 60;
+  const deltaMinutes = (deltaY / hourHeight) * 60;
+  
+  let newStart = resizingItem.start;
+  let newEnd = resizingItem.end;
+  
+  if (resizeEdge === 'top') {
+    // 上端をドラッグ → 開始時刻を変更
+    const rawStart = resizingItem.start.plus({ minutes: deltaMinutes });
+    newStart = snapToMinorTick(rawStart, minorTick);
+    
+    // 開始時刻が終了時刻を超えないようにする
+    if (newStart >= resizingItem.end) {
+      newStart = resizingItem.end.minus({ minutes: minorTick });
+    }
+  } else {
+    // 下端をドラッグ → 終了時刻を変更
+    const rawEnd = resizingItem.end.plus({ minutes: deltaMinutes });
+    newEnd = snapToMinorTick(rawEnd, minorTick);
+    
+    // 終了時刻が開始時刻を下回らないようにする
+    if (newEnd <= resizingItem.start) {
+      newEnd = resizingItem.start.plus({ minutes: minorTick });
+    }
+  }
+  
+  // イベントを発火（リアルタイムプレビュー）
+  onItemResize?.(resizingItem, newStart, newEnd);
+  resizeStartY = event.clientY;
+}
+
+// リサイズ終了
+function handleResizeEnd() {
+  document.removeEventListener('mousemove', handleResizeMove);
+  document.removeEventListener('mouseup', handleResizeEnd);
+  
+  resizingItem = null;
+  resizeEdge = null;
+  resizeStartY = 0;
 }
 
 // ドラッグ&ドロップ関連の状態
 let draggedItem = $state<CalendarItem | null>(null);
 let draggedOverDay = $state<DateTime | null>(null);
 let draggedOverY = $state<number | null>(null);
+
+// リサイズ関連の状態
+let resizingItem = $state<CalendarItem | null>(null);
+let resizeEdge = $state<'top' | 'bottom' | null>(null);
+let resizeStartY = $state<number>(0);
+
+// ドラッグプレビュー（移動先の影）のスタイルを計算
+let dragPreviewStyle = $derived.by(() => {
+  if (!draggedItem || !draggedOverDay || draggedOverY === null) return null;
+  if (!draggedItem.start || !draggedItem.end) return null;
+  
+  const hourHeight = 60;
+  const hoursFromStart = draggedOverY / hourHeight;
+  const minutesFromStart = hoursFromStart * 60;
+  
+  // 新しい開始位置を計算（minorTick単位にスナップ）
+  const rawStart = draggedOverDay.startOf('day').set({ hour: startHour }).plus({ minutes: minutesFromStart });
+  const newStart = snapToMinorTick(rawStart, minorTick);
+  const dayStart = newStart.startOf('day').set({ hour: startHour });
+  const top = newStart.diff(dayStart, 'minutes').minutes;
+  
+  // アイテムの期間を維持
+  const duration = draggedItem.end.diff(draggedItem.start, 'minutes').minutes;
+  const height = duration;
+  
+  return {
+    day: draggedOverDay,
+    top: (top / 60) * hourHeight,
+    height: (height / 60) * hourHeight
+  };
+});
 
 // ドラッグ開始
 function handleDragStart(event: DragEvent, item: CalendarItem) {
@@ -192,6 +286,26 @@ function goToToday() {
   onViewChange?.(newDate);
 }
 
+// 設定モーダル関連
+let showSettings = $state(false);
+
+function toggleSettings() {
+  showSettings = !showSettings;
+}
+
+// 設定変更ハンドラ
+function handleSettingsChange(settings: {
+  minorTick: number;
+  startHour: number;
+  endHour: number;
+  showWeekend: boolean;
+  showAllDay: boolean;
+}) {
+  // 設定値を更新（親コンポーネントに通知）
+  // TODO: 設定変更イベントを追加する必要がある
+  console.log('Settings changed:', settings);
+}
+
 // アイテムの位置とサイズを計算
 function getItemStyle(item: CalendarItem): string {
   if (!item.start || !item.end) return '';
@@ -219,6 +333,13 @@ function getItemClass(item: CalendarItem): string {
 <div class="week-view">
   <!-- ヘッダー: ナビゲーションと週表示 -->
   <div class="week-header">
+    <button class="nav-button settings-button" onclick={toggleSettings} title="設定">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M12 1v6m0 6v6M1 12h6m6 0h6"/>
+        <path d="m4.93 4.93 4.24 4.24m5.66 5.66 4.24 4.24M4.93 19.07l4.24-4.24m5.66-5.66 4.24-4.24"/>
+      </svg>
+    </button>
     <button class="nav-button" onclick={goToPreviousWeek}>◀</button>
     <button class="nav-button today" onclick={goToToday}>今日</button>
     <span class="week-title">
@@ -226,6 +347,19 @@ function getItemClass(item: CalendarItem): string {
     </span>
     <button class="nav-button" onclick={goToNextWeek}>▶</button>
   </div>
+  
+  <!-- 設定モーダル -->
+  {#if showSettings}
+    <SettingsModal
+      {minorTick}
+      {startHour}
+      {endHour}
+      showWeekend={true}
+      showAllDay={true}
+      onClose={toggleSettings}
+      onChange={handleSettingsChange}
+    />
+  {/if}
 
   <!-- カレンダーグリッド -->
   <div class="calendar-grid">
@@ -274,6 +408,14 @@ function getItemClass(item: CalendarItem): string {
             ></div>
           {/if}
 
+          <!-- ドラッグプレビュー（移動先の影） -->
+          {#if dragPreviewStyle && dragPreviewStyle.day.hasSame(day, 'day')}
+            <div
+              class="drag-preview"
+              style="top: {dragPreviewStyle.top}px; height: {dragPreviewStyle.height}px;"
+            ></div>
+          {/if}
+
           <!-- アイテム表示 -->
           <div class="items-container">
             {#each getItemsForDay(day) as item (item.id)}
@@ -288,12 +430,24 @@ function getItemClass(item: CalendarItem): string {
                 role="button"
                 tabindex="0"
               >
+                <!-- リサイズハンドル（上端） -->
+                <div 
+                  class="resize-handle resize-handle-top"
+                  onmousedown={(e) => handleResizeStart(e, item, 'top')}
+                ></div>
+                
                 <div class="item-title">{item.title}</div>
                 {#if item.start && item.end}
                   <div class="item-time">
                     {formatTime(item.start)} - {formatTime(item.end)}
                   </div>
                 {/if}
+                
+                <!-- リサイズハンドル（下端） -->
+                <div 
+                  class="resize-handle resize-handle-bottom"
+                  onmousedown={(e) => handleResizeStart(e, item, 'bottom')}
+                ></div>
               </div>
             {/each}
           </div>
@@ -338,6 +492,18 @@ function getItemClass(item: CalendarItem): string {
   .nav-button.today {
     background: #2196f3;
     color: white;
+    border-color: #2196f3;
+  }
+
+  .nav-button.settings-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+  }
+
+  .nav-button.settings-button:hover {
+    background: #e3f2fd;
     border-color: #2196f3;
   }
 
@@ -517,5 +683,39 @@ function getItemClass(item: CalendarItem): string {
     height: 2px;
     pointer-events: none;
     z-index: 10;
+  }
+
+  /* ドラッグプレビュー（移動先の影） */
+  .drag-preview {
+    position: absolute;
+    left: 4px;
+    right: 4px;
+    background-color: rgba(33, 150, 243, 0.1);
+    border: 2px dashed rgba(33, 150, 243, 0.4);
+    border-radius: 4px;
+    pointer-events: none;
+    z-index: 5;
+  }
+
+  /* リサイズハンドル */
+  .resize-handle {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 8px;
+    cursor: ns-resize;
+    z-index: 20;
+  }
+
+  .resize-handle-top {
+    top: 0;
+  }
+
+  .resize-handle-bottom {
+    bottom: 0;
+  }
+
+  .resize-handle:hover {
+    background-color: rgba(33, 150, 243, 0.3);
   }
 </style>

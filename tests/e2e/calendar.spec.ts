@@ -26,9 +26,9 @@ test.describe('Calendar WeekView', () => {
     await expect(todayButton).toBeVisible();
     await expect(todayButton).toContainText('今日');
     
-    // 前週・次週ボタンが表示されていること
+    // 設定・前週・今日・次週ボタンが表示されていること
     const navButtons = page.locator('.nav-button');
-    await expect(navButtons).toHaveCount(3);
+    await expect(navButtons).toHaveCount(4);
   });
 
   test('7日分の曜日列が表示されること', async ({ page }) => {
