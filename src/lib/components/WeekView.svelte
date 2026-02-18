@@ -176,8 +176,9 @@ function handleResizeEnd() {
 
 // ドラッグ&ドロップ関連の状態
 let draggedItem = $state<CalendarItem | null>(null);
-let draggedOverDay = $state<DateTime | null>(null);
-let draggedOverY = $state<number | null>(null);
+let draggedItemElement = $state<HTMLElement | null>(null);
+let dragStartMouseY = $state<number>(0);
+let dragStartItemY = $state<number>(0);
 
 // リサイズ関連の状態
 let resizingItem = $state<CalendarItem | null>(null);
@@ -186,15 +187,42 @@ let resizeStartY = $state<number>(0);
 
 // ドラッグプレビュー（移動先の影）のスタイルを計算
 let dragPreviewStyle = $derived.by(() => {
-  if (!draggedItem || !draggedOverDay || draggedOverY === null) return null;
+  if (!draggedItem || !draggedItemElement) return null;
   if (!draggedItem.start || !draggedItem.end) return null;
   
+  // 現在のアイテムの位置を取得
+  const itemRect = draggedItemElement.getBoundingClientRect();
+  
+  // マウスの移動量からアイテムの新しい位置を計算
+  const mouseDeltaY = dragStartMouseY - dragStartItemY;
+  const currentItemY = itemRect.top;
+  
+  // 全ての日列を取得して、アイテムがどの列にあるか判定
+  const dayGrids = document.querySelectorAll('.day-grid');
+  let targetDay: DateTime | null = null;
+  let targetDayRect: DOMRect | null = null;
+  
+  for (let i = 0; i < dayGrids.length; i++) {
+    const gridRect = dayGrids[i].getBoundingClientRect();
+    const itemCenterX = itemRect.left + itemRect.width / 2;
+    
+    if (itemCenterX >= gridRect.left && itemCenterX < gridRect.right) {
+      targetDay = weekDays[i];
+      targetDayRect = gridRect;
+      break;
+    }
+  }
+  
+  if (!targetDay || !targetDayRect) return null;
+  
+  // アイテムの上端位置から時刻を計算
+  const y = currentItemY - targetDayRect.top;
   const hourHeight = 60;
-  const hoursFromStart = draggedOverY / hourHeight;
+  const hoursFromStart = y / hourHeight;
   const minutesFromStart = hoursFromStart * 60;
   
   // 新しい開始位置を計算（minorTick単位にスナップ）
-  const rawStart = draggedOverDay.startOf('day').set({ hour: startHour }).plus({ minutes: minutesFromStart });
+  const rawStart = targetDay.startOf('day').set({ hour: startHour }).plus({ minutes: minutesFromStart });
   const newStart = snapToMinorTick(rawStart, minorTick);
   const dayStart = newStart.startOf('day').set({ hour: startHour });
   const top = newStart.diff(dayStart, 'minutes').minutes;
@@ -204,7 +232,7 @@ let dragPreviewStyle = $derived.by(() => {
   const height = duration;
   
   return {
-    day: draggedOverDay,
+    day: targetDay,
     top: (top / 60) * hourHeight,
     height: (height / 60) * hourHeight,
     newStart,
@@ -215,6 +243,12 @@ let dragPreviewStyle = $derived.by(() => {
 // ドラッグ開始
 function handleDragStart(event: DragEvent, item: CalendarItem) {
   draggedItem = item;
+  draggedItemElement = event.currentTarget as HTMLElement;
+  dragStartMouseY = event.clientY;
+  
+  // アイテムの現在のY位置を取得
+  const itemRect = draggedItemElement.getBoundingClientRect();
+  dragStartItemY = itemRect.top;
   
   if (event.dataTransfer) {
     event.dataTransfer.effectAllowed = 'move';
@@ -225,8 +259,9 @@ function handleDragStart(event: DragEvent, item: CalendarItem) {
 // ドラッグ終了
 function handleDragEnd() {
   draggedItem = null;
-  draggedOverDay = null;
-  draggedOverY = null;
+  draggedItemElement = null;
+  dragStartMouseY = 0;
+  dragStartItemY = 0;
 }
 
 // ドラッグオーバー（日列）
@@ -235,12 +270,7 @@ function handleDayDragOver(event: DragEvent, day: DateTime) {
   if (event.dataTransfer) {
     event.dataTransfer.dropEffect = 'move';
   }
-  draggedOverDay = day;
-  
-  // マウスのY座標を取得
-  const target = event.currentTarget as HTMLElement;
-  const rect = target.getBoundingClientRect();
-  draggedOverY = event.clientY - rect.top;
+  // dragPreviewStyleがリアクティブに更新される
 }
 
 // ドロップ処理
@@ -254,8 +284,9 @@ function handleDrop(event: DragEvent, day: DateTime) {
   
   // 状態をリセット
   draggedItem = null;
-  draggedOverDay = null;
-  draggedOverY = null;
+  draggedItemElement = null;
+  dragStartMouseY = 0;
+  dragStartItemY = 0;
 }
 
 // 前の週に移動
