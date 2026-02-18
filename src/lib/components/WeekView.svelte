@@ -8,7 +8,7 @@
 
 import { DateTime } from 'luxon';
 import type { CalendarItem } from '../models';
-import { getWeekDays, formatTime, formatWeekday, generateTimeSlots } from '../utils';
+import { getWeekDays, formatTime, formatWeekday, generateTimeSlots, snapToMinorTick } from '../utils';
 
 interface Props {
   /** 表示するアイテムリスト */
@@ -23,8 +23,14 @@ interface Props {
   /** 表示終了時刻（1-24） */
   endHour?: number;
   
-  /** 時間軸の刻み（分単位） */
+  /** 時間軸の刻み（分単位） - 非推奨: majorTickを使用してください */
   tickInterval?: number;
+  
+  /** 1セルの単位（分単位）- メジャーグリッド線の間隔 */
+  majorTick?: number;
+  
+  /** セル内の細かい単位（分単位）- マイナーグリッド線の間隔、DnD移動単位 */
+  minorTick?: number;
   
   /** アイテムクリック時のイベントハンドラ */
   onItemClick?: (item: CalendarItem) => void;
@@ -45,6 +51,8 @@ let {
   startHour = 0,
   endHour = 24,
   tickInterval = 60,
+  majorTick = 60,
+  minorTick = 15,
   onItemClick,
   onItemMove,
   onItemResize,
@@ -54,8 +62,36 @@ let {
 // 週の日付リストを取得
 let weekDays = $derived(getWeekDays(currentDate));
 
-// 時間スロットを生成
-let timeSlots = $derived(generateTimeSlots(startHour, endHour, tickInterval));
+// 時間スロットを生成（majorTick優先、tickIntervalは後方互換性のため）
+let timeSlots = $derived(generateTimeSlots(startHour, endHour, majorTick));
+
+// minorTickグリッド線を生成
+let minorGridLines = $derived.by(() => {
+  const lines: number[] = [];
+  const totalMinutes = (endHour - startHour) * 60;
+  for (let minutes = 0; minutes <= totalMinutes; minutes += minorTick) {
+    lines.push(minutes);
+  }
+  return lines;
+});
+
+// 現在時刻線の位置を計算
+let currentTimeLine = $derived.by(() => {
+  const now = DateTime.now();
+  const todayStart = now.startOf('day').set({ hour: startHour });
+  const minutesFromStart = now.diff(todayStart, 'minutes').minutes;
+  
+  // 表示範囲外の場合はnullを返す
+  const totalMinutes = (endHour - startHour) * 60;
+  if (minutesFromStart < 0 || minutesFromStart > totalMinutes) {
+    return null;
+  }
+  
+  return {
+    position: minutesFromStart,
+    today: now.startOf('day')
+  };
+});
 
 // 各日のアイテムをフィルタリング
 function getItemsForDay(day: DateTime): CalendarItem[] {
@@ -121,8 +157,9 @@ function handleDrop(event: DragEvent, day: DateTime) {
   const hoursFromStart = y / hourHeight;
   const minutesFromStart = hoursFromStart * 60;
   
-  // 新しい開始日時を計算
-  const newStart = day.startOf('day').set({ hour: startHour }).plus({ minutes: minutesFromStart });
+  // 新しい開始日時を計算（minorTick単位にスナップ）
+  const rawStart = day.startOf('day').set({ hour: startHour }).plus({ minutes: minutesFromStart });
+  const newStart = snapToMinorTick(rawStart, minorTick);
   
   // アイテムの期間を維持
   const duration = draggedItem.end.diff(draggedItem.start, 'minutes').minutes;
@@ -218,6 +255,24 @@ function getItemClass(item: CalendarItem): string {
           {#each timeSlots as slot}
             <div class="grid-cell"></div>
           {/each}
+          
+          <!-- minorTickグリッド線 -->
+          {#each minorGridLines as minutes}
+            <div 
+              class="minor-grid-line" 
+              style="top: {minutes}px;"
+            ></div>
+          {/each}
+          
+          <!-- 現在時刻線 -->
+          {#if currentTimeLine && weekDays.some(d => d.hasSame(currentTimeLine.today, 'day'))}
+            {@const isToday = day.hasSame(currentTimeLine.today, 'day')}
+            {@const opacity = isToday ? 0.75 : 0.3}
+            <div 
+              class="current-time-line" 
+              style="top: {currentTimeLine.position}px; background-color: rgba(244, 67, 54, {opacity});"
+            ></div>
+          {/if}
 
           <!-- アイテム表示 -->
           <div class="items-container">
@@ -441,5 +496,26 @@ function getItemClass(item: CalendarItem): string {
 
   .day-grid:hover {
     background-color: rgba(33, 150, 243, 0.05);
+  }
+
+  /* minorTickグリッド線 */
+  .minor-grid-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background-color: rgba(0, 0, 0, 0.05);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* 現在時刻線 */
+  .current-time-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    pointer-events: none;
+    z-index: 10;
   }
 </style>

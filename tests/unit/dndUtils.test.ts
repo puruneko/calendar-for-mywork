@@ -9,6 +9,7 @@ import {
   calculateNewStartTime,
   calculateNewEndTime,
   snapToQuarterHour,
+  snapToMinorTick,
 } from '../../src/lib/utils/dndUtils';
 
 describe('dndUtils', () => {
@@ -149,6 +150,44 @@ describe('dndUtils', () => {
     it('秒とミリ秒が0にリセットされること', () => {
       const dateTime = DateTime.fromISO('2026-02-17T09:15:30.500');
       const snapped = snapToQuarterHour(dateTime);
+      
+      expect(snapped.second).toBe(0);
+      expect(snapped.millisecond).toBe(0);
+    });
+  });
+
+  describe('snapToMinorTick', () => {
+    it('15分単位にスナップできること（デフォルト）', () => {
+      const dateTime = DateTime.fromISO('2026-02-17T09:08:00');
+      const snapped = snapToMinorTick(dateTime);
+      
+      expect(snapped.minute).toBe(15);
+    });
+
+    it('10分単位にスナップできること', () => {
+      const dateTime = DateTime.fromISO('2026-02-17T09:08:00');
+      const snapped = snapToMinorTick(dateTime, 10);
+      
+      expect(snapped.minute).toBe(10);
+    });
+
+    it('30分単位にスナップできること', () => {
+      const dateTime = DateTime.fromISO('2026-02-17T09:23:00');
+      const snapped = snapToMinorTick(dateTime, 30);
+      
+      expect(snapped.minute).toBe(30);
+    });
+
+    it('5分単位にスナップできること', () => {
+      const dateTime = DateTime.fromISO('2026-02-17T09:08:00');
+      const snapped = snapToMinorTick(dateTime, 5);
+      
+      expect(snapped.minute).toBe(10);
+    });
+
+    it('秒とミリ秒が0にリセットされること', () => {
+      const dateTime = DateTime.fromISO('2026-02-17T09:15:30.500');
+      const snapped = snapToMinorTick(dateTime, 15);
       
       expect(snapped.second).toBe(0);
       expect(snapped.millisecond).toBe(0);

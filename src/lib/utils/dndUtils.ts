@@ -62,9 +62,21 @@ export function calculateNewEndTime(
  * 
  * @param dateTime - 対象の日時
  * @returns 15分単位にスナップされた日時
+ * @deprecated snapToMinorTickを使用してください
  */
 export function snapToQuarterHour(dateTime: DateTime): DateTime {
+  return snapToMinorTick(dateTime, 15);
+}
+
+/**
+ * 時間を指定した分単位にスナップ
+ * 
+ * @param dateTime - 対象の日時
+ * @param minorTick - スナップ単位（分）
+ * @returns 指定した分単位にスナップされた日時
+ */
+export function snapToMinorTick(dateTime: DateTime, minorTick: number = 15): DateTime {
   const minutes = dateTime.minute;
-  const snappedMinutes = Math.round(minutes / 15) * 15;
+  const snappedMinutes = Math.round(minutes / minorTick) * minorTick;
   return dateTime.set({ minute: snappedMinutes, second: 0, millisecond: 0 });
 }
