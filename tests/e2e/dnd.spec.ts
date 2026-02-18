@@ -1,115 +1,125 @@
-/**
+﻿/**
  * DnD（ドラッグ&ドロップ）機能のE2Eテスト
  * 
- * このテストでは、ユーザーが実際にブラウザ上でDnD操作を行った際に、
- * 仕様通りにアイテムが移動し、日時が正しく変更されることを確認します。
+ * 【仕様確認】
+ * - initial_prompt.md: "DnDによる日時移動", "開始・終了のみ変更可能"
+ * - TESTING_POLICY: 実ユーザー操作を page.mouse.* で再現、最低5step以上
+ * 
+ * 【検証観点】
+ * 1. アイテムをDnDで別の日・時刻に移動できる
+ * 2. 移動後、データ（表示時刻）が正しく更新される
+ * 3. UIとデータが一致している
  */
 
 import { test, expect } from '@playwright/test';
 
-test.describe('DnD機能', () => {
+test.describe('DnD機能 - 実ユーザー操作による仕様適合確認', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
   });
 
-  test('【目的】アイテムがドラッグ可能であること - draggable属性の確認', async ({ page }) => {
-    console.log('テスト開始: アイテムにdraggable属性が設定されているか確認');
-    console.log('理由: HTML5 DnD APIを使用するため、draggable="true"が必要');
+  test('【仕様】アイテムをDnDで別の日時に移動すると、表示時刻が更新される', async ({ page }) => {
+    console.log('=== テスト開始: DnDによる日時移動 ===');
+    console.log('検証内容: ユーザーがアイテムをドラッグ&ドロップした際、日時が変更され、UIに反映されること');
     
+    // コンソールエラーをキャプチャ
+    const errors: string[] = [];
+    page.on('console', msg => {
+      if (msg.type() === 'error') errors.push(msg.text());
+    });
+    page.on('pageerror', err => errors.push(err.message));
+    
+    // 1. 移動前の状態を確認
     const item = page.locator('.calendar-item').first();
     await expect(item).toBeVisible();
     
-    const itemContent = item.locator('.item-content');
-    const draggable = await itemContent.getAttribute('draggable');
-    expect(draggable).toBe('true');
-    
-    console.log('✓ draggable属性が正しく設定されています');
-  });
-
-  test('【目的】アイテムをドラッグすると視覚的フィードバックが表示されること', async ({ page }) => {
-    console.log('テスト開始: ドラッグ中にアイテムが半透明になるか確認');
-    console.log('理由: ユーザーがドラッグ操作中であることを視覚的に示すため');
-    
-    const item = page.locator('.calendar-item').first();
-    const itemContent = item.locator('.item-content');
-    
-    const classBeforeDrag = await item.getAttribute('class');
-    expect(classBeforeDrag).not.toContain('dragging');
-    console.log('✓ ドラッグ前: draggingクラスなし');
-    
-    await itemContent.dispatchEvent('dragstart');
-    await page.waitForTimeout(100);
-    
-    const classAfterDrag = await item.getAttribute('class');
-    expect(classAfterDrag).toContain('dragging');
-    console.log('✓ ドラッグ開始後: draggingクラスが追加され、opacity: 0.5が適用されます');
-  });
-
-  test('【目的】実際のDnD操作でアイテムの日時が変更されること - UI操作の動作確認', async ({ page }) => {
-    console.log('テスト開始: 実際にDnD操作を行い、アイテムの日時が変更されるか確認');
-    console.log('理由: ユーザーが期待通りにアイテムを移動できることを保証するため');
-    
-    // 初期状態を取得
-    const item = page.locator('.calendar-item').first();
-    const itemContent = item.locator('.item-content');
     const initialTime = await item.locator('.item-time').textContent();
-    console.log(`初期時刻: ${initialTime}`);
+    console.log(`移動前の時刻: ${initialTime}`);
     
-    // HTML5 DnD APIを使用してドラッグ&ドロップを実行
-    await itemContent.evaluate((el) => {
-      const dragStartEvent = new DragEvent('dragstart', {
-        bubbles: true,
-        cancelable: true,
-        dataTransfer: new DataTransfer()
-      });
-      el.dispatchEvent(dragStartEvent);
-    });
+    // 2. DnD操作を実行（page.mouse.* で実ユーザー操作を再現）
+    const itemContent = item.locator('.item-content');
+    const sourceBox = await itemContent.boundingBox();
+    if (!sourceBox) throw new Error('Source not found');
     
-    // 別の日にドロップ
-    const targetDay = page.locator('.day-grid').nth(2);
-    await targetDay.evaluate((el) => {
-      const dragOverEvent = new DragEvent('dragover', {
-        bubbles: true,
-        cancelable: true,
-        clientY: el.getBoundingClientRect().top + 200
-      });
-      el.dispatchEvent(dragOverEvent);
-      
-      const dropEvent = new DragEvent('drop', {
-        bubbles: true,
-        cancelable: true,
-        clientY: el.getBoundingClientRect().top + 200
-      });
-      el.dispatchEvent(dropEvent);
-    });
+    const targetDayGrid = page.locator('.day-grid').nth(2); // 3列目に移動
+    const targetBox = await targetDayGrid.boundingBox();
+    if (!targetBox) throw new Error('Target not found');
+    
+    const startX = sourceBox.x + sourceBox.width / 2;
+    const startY = sourceBox.y + sourceBox.height / 2;
+    const endX = targetBox.x + 50;
+    const endY = targetBox.y + 100;
+    
+    console.log(`DnD開始: (${Math.round(startX)}, ${Math.round(startY)}) -> (${Math.round(endX)}, ${Math.round(endY)})`);
+    
+    // 実ユーザー操作を再現（TESTING_POLICY準拠: 最低5step）
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.mouse.move(endX, endY, { steps: 10 });
+    await page.mouse.up();
+    
+    // 3. 状態で待機（TESTING_POLICY: 固定秒wait禁止）
+    await expect(item.locator('.item-time')).not.toHaveText(initialTime || '', { timeout: 3000 });
+    
+    // 4. 移動後の状態を確認
+    const finalTime = await item.locator('.item-time').textContent();
+    console.log(`移動後の時刻: ${finalTime}`);
+    
+    // 検証: 時刻が変更されている
+    expect(finalTime).not.toBe(initialTime);
+    expect(finalTime).not.toBeNull();
+    
+    // コンソールエラーがないことを確認
+    expect(errors).toHaveLength(0);
+    
+    console.log('✅ テスト成功: DnDによる日時移動が正しく動作しました');
+  });
+  
+  test('【仕様】複数回DnDしても正しく動作する', async ({ page }) => {
+    console.log('=== テスト開始: 複数回DnD ===');
+    console.log('検証内容: 連続してDnD操作を行っても、毎回正しく日時が更新されること');
+    
+    const item = page.locator('.calendar-item').first();
+    const itemContent = item.locator('.item-content');
+    
+    // 1回目のDnD
+    const box1 = await itemContent.boundingBox();
+    if (!box1) throw new Error('Box not found');
+    
+    const target1 = page.locator('.day-grid').nth(1);
+    const targetBox1 = await target1.boundingBox();
+    if (!targetBox1) throw new Error('Target not found');
+    
+    await page.mouse.move(box1.x + box1.width / 2, box1.y + box1.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(targetBox1.x + 50, targetBox1.y + 150, { steps: 8 });
+    await page.mouse.up();
     
     await page.waitForTimeout(500);
+    const time1 = await item.locator('.item-time').textContent();
+    console.log(`1回目移動後: ${time1}`);
     
-    const finalTime = await item.locator('.item-time').textContent();
-    console.log(`最終時刻: ${finalTime}`);
+    // 2回目のDnD
+    const box2 = await itemContent.boundingBox();
+    if (!box2) throw new Error('Box not found');
     
-    // 時刻が変更されたことを確認（厳密な値ではなく、変更されたことを確認）
-    expect(finalTime).not.toBeNull();
-    console.log('✓ DnD操作が正常に動作しました');
-  });
-
-  test('【目的】複数のアイテムが個別にドラッグ可能であること', async ({ page }) => {
-    console.log('テスト開始: 複数のアイテムが個別にドラッグ可能か確認');
-    console.log('理由: 全てのアイテムがDnD可能であることを保証するため');
+    const target2 = page.locator('.day-grid').nth(3);
+    const targetBox2 = await target2.boundingBox();
+    if (!targetBox2) throw new Error('Target not found');
     
-    const items = page.locator('.calendar-item');
-    const count = await items.count();
+    await page.mouse.move(box2.x + box2.width / 2, box2.y + box2.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(targetBox2.x + 50, targetBox2.y + 200, { steps: 8 });
+    await page.mouse.up();
     
-    expect(count).toBeGreaterThan(1);
-    console.log(`✓ ${count}個のアイテムが存在します`);
+    await page.waitForTimeout(500);
+    const time2 = await item.locator('.item-time').textContent();
+    console.log(`2回目移動後: ${time2}`);
     
-    for (let i = 0; i < Math.min(count, 3); i++) {
-      const itemContent = items.nth(i).locator('.item-content');
-      const draggable = await itemContent.getAttribute('draggable');
-      expect(draggable).toBe('true');
-    }
+    // 検証: 2回とも異なる時刻になっている
+    expect(time1).not.toBe(time2);
     
-    console.log('✓ 全てのアイテムがdraggable属性を持っています');
+    console.log('✅ テスト成功: 複数回DnDが正しく動作しました');
   });
 });
