@@ -63,6 +63,11 @@ let items = $state<CalendarItem[]>([
 
 let currentDate = $state(DateTime.now());
 
+// カレンダー設定
+let startHour = $state(8);
+let endHour = $state(20);
+let minorTick = $state(15);
+
 // イベントハンドラ
 function handleItemClick(item: CalendarItem) {
   console.log('Item clicked:', item);
@@ -91,6 +96,19 @@ function handleViewChange(newDate: DateTime) {
   console.log('View changed:', newDate);
   currentDate = newDate;
 }
+
+function handleSettingsChange(settings: {
+  minorTick: number;
+  startHour: number;
+  endHour: number;
+  showWeekend: boolean;
+  showAllDay: boolean;
+}) {
+  console.log('Settings changed:', settings);
+  minorTick = settings.minorTick;
+  startHour = settings.startHour;
+  endHour = settings.endHour;
+}
 </script>
 
 <div class="demo-app">
@@ -103,13 +121,15 @@ function handleViewChange(newDate: DateTime) {
     <WeekView
       {items}
       {currentDate}
-      startHour={8}
-      endHour={20}
+      {startHour}
+      {endHour}
+      {minorTick}
       tickInterval={60}
       onItemClick={handleItemClick}
       onItemMove={handleItemMove}
       onItemResize={handleItemResize}
       onViewChange={handleViewChange}
+      onSettingsChange={handleSettingsChange}
     />
   </main>
 </div>

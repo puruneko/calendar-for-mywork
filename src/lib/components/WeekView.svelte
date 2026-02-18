@@ -47,6 +47,15 @@ interface Props {
   
   /** DnD時の日付変更閾値（0.0-1.0、アイテム幅の何%が別の列に入ったら移動とみなすか） */
   dayChangeThreshold?: number;
+  
+  /** 設定変更時のイベントハンドラ */
+  onSettingsChange?: (settings: {
+    minorTick: number;
+    startHour: number;
+    endHour: number;
+    showWeekend: boolean;
+    showAllDay: boolean;
+  }) => void;
 }
 
 let {
@@ -62,6 +71,7 @@ let {
   onItemMove,
   onItemResize,
   onViewChange,
+  onSettingsChange,
 }: Props = $props();
 
 // 週の日付リストを取得
@@ -107,6 +117,88 @@ function getItemsForDay(day: DateTime): CalendarItem[] {
   });
 }
 
+// アイテムの重なりを検出して横幅を調整
+function getItemsWithLayout(day: DateTime): Array<CalendarItem & { left: number; width: number }> {
+  const dayItems = getItemsForDay(day);
+  
+  // 時間順にソート
+  const sorted = [...dayItems].sort((a, b) => {
+    if (!a.start || !b.start) return 0;
+    return a.start.toMillis() - b.start.toMillis();
+  });
+  
+  // 重なりグループを検出
+  const groups: CalendarItem[][] = [];
+  let currentGroup: CalendarItem[] = [];
+  
+  sorted.forEach((item, index) => {
+    if (!item.start || !item.end) return;
+    
+    if (currentGroup.length === 0) {
+      currentGroup.push(item);
+    } else {
+      // 現在のグループの最後のアイテムと重なるかチェック
+      const lastItem = currentGroup[currentGroup.length - 1];
+      if (lastItem.end && item.start < lastItem.end) {
+        currentGroup.push(item);
+      } else {
+        // 新しいグループ開始
+        groups.push(currentGroup);
+        currentGroup = [item];
+      }
+    }
+    
+    // 最後のアイテム
+    if (index === sorted.length - 1) {
+      groups.push(currentGroup);
+    }
+  });
+  
+  // 各グループ内でレイアウトを計算
+  const result: Array<CalendarItem & { left: number; width: number }> = [];
+  
+  groups.forEach(group => {
+    const columns: CalendarItem[][] = [];
+    
+    group.forEach(item => {
+      // このアイテムが配置できる最初の列を探す
+      let placed = false;
+      for (let col = 0; col < columns.length; col++) {
+        const columnItems = columns[col];
+        const canPlace = columnItems.every(existing => {
+          return !existing.end || !item.start || existing.end <= item.start;
+        });
+        
+        if (canPlace) {
+          columnItems.push(item);
+          placed = true;
+          break;
+        }
+      }
+      
+      // 配置できる列がなければ新しい列を作成
+      if (!placed) {
+        columns.push([item]);
+      }
+    });
+    
+    // 各アイテムの位置を計算
+    const columnWidth = 100 / columns.length;
+    
+    columns.forEach((column, colIndex) => {
+      column.forEach(item => {
+        result.push({
+          ...item,
+          left: colIndex * columnWidth,
+          width: columnWidth
+        });
+      });
+    });
+  });
+  
+  return result;
+}
+
 // アイテムクリックハンドラ
 function handleItemClick(item: CalendarItem) {
   // リサイズ中はクリックイベントを無視
@@ -147,7 +239,7 @@ function handleResizeMove(event: MouseEvent) {
   let newEnd = resizingItem.end;
   
   if (resizeEdge === 'top') {
-    // 上端をドラッグ → 開始時刻を変更
+    // 上端をドラッグ → 開始時刻を変更（日付をまたぐことも可能）
     const rawStart = resizingItem.start.plus({ minutes: deltaMinutes });
     newStart = snapToMinorTick(rawStart, minorTick);
     
@@ -156,7 +248,7 @@ function handleResizeMove(event: MouseEvent) {
       newStart = resizingItem.end.minus({ minutes: minorTick });
     }
   } else {
-    // 下端をドラッグ → 終了時刻を変更
+    // 下端をドラッグ → 終了時刻を変更（日付をまたぐことも可能）
     const rawEnd = resizingItem.end.plus({ minutes: deltaMinutes });
     newEnd = snapToMinorTick(rawEnd, minorTick);
     
@@ -342,13 +434,12 @@ function handleSettingsChange(settings: {
   showWeekend: boolean;
   showAllDay: boolean;
 }) {
-  // 設定値を更新（親コンポーネントに通知）
-  // TODO: 設定変更イベントを追加する必要がある
-  console.log('Settings changed:', settings);
+  // 親コンポーネントに設定変更を通知
+  onSettingsChange?.(settings);
 }
 
-// アイテムの位置とサイズを計算
-function getItemStyle(item: CalendarItem): string {
+// アイテムの位置とサイズを計算（横幅調整あり）
+function getItemStyle(item: CalendarItem & { left?: number; width?: number }): string {
   if (!item.start || !item.end) return '';
   
   const dayStart = item.start.startOf('day').set({ hour: startHour });
@@ -358,6 +449,14 @@ function getItemStyle(item: CalendarItem): string {
   const hourHeight = 60; // 1時間あたりのピクセル高さ
   const top = (minutesFromStart / 60) * hourHeight;
   const height = (duration / 60) * hourHeight;
+  
+  // 重なり時の横位置・横幅
+  const left = item.left !== undefined ? `${item.left}%` : '4px';
+  const right = item.width !== undefined ? `${100 - item.left! - item.width}%` : '4px';
+  
+  if (item.left !== undefined && item.width !== undefined) {
+    return `top: ${top}px; height: ${height}px; left: ${left}; right: ${right};`;
+  }
   
   return `top: ${top}px; height: ${height}px;`;
 }
@@ -459,7 +558,7 @@ function getItemClass(item: CalendarItem): string {
 
           <!-- アイテム表示 -->
           <div class="items-container">
-            {#each getItemsForDay(day) as item (item.id)}
+            {#each getItemsWithLayout(day) as item (item.id)}
               <div
                 class="{getItemClass(item)} {draggedItem?.id === item.id ? 'dragging' : ''}"
                 style={getItemStyle(item)}
@@ -665,28 +764,28 @@ function getItemClass(item: CalendarItem): string {
 
   /* Task スタイル */
   .task.task-todo {
-    background: var(--task-todo-bg, #90caf9);
+    background: var(--task-todo-bg, rgba(144, 202, 249, 0.85));
     border-left: 4px solid #2196f3;
   }
 
   .task.task-doing {
-    background: var(--task-doing-bg, #ffb74d);
+    background: var(--task-doing-bg, rgba(255, 183, 77, 0.85));
     border-left: 4px solid #ff9800;
   }
 
   .task.task-done {
-    background: var(--task-done-bg, #a5d6a7);
+    background: var(--task-done-bg, rgba(165, 214, 167, 0.85));
     border-left: 4px solid #4caf50;
   }
 
   .task.task-undefined {
-    background: #e0e0e0;
+    background: rgba(224, 224, 224, 0.85);
     border-left: 4px solid #9e9e9e;
   }
 
   /* Appointment スタイル */
   .appointment {
-    background: var(--appointment-bg, #ce93d8);
+    background: var(--appointment-bg, rgba(206, 147, 216, 0.85));
     border-left: 4px solid #9c27b0;
   }
 
