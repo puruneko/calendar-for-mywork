@@ -15,20 +15,22 @@ test.describe('DnD機能', () => {
     const item = page.locator('.calendar-item').first();
     await expect(item).toBeVisible();
     
-    // draggable属性があることを確認
-    const draggable = await item.getAttribute('draggable');
+    // アイテム本体（.item-content）がdraggable属性を持つことを確認
+    const itemContent = item.locator('.item-content');
+    const draggable = await itemContent.getAttribute('draggable');
     expect(draggable).toBe('true');
   });
 
   test('アイテムをドラッグすると半透明になること', async ({ page }) => {
     const item = page.locator('.calendar-item').first();
+    const itemContent = item.locator('.item-content');
     
     // 元のスタイルを確認（draggingクラスがない）
     const classBeforeDrag = await item.getAttribute('class');
     expect(classBeforeDrag).not.toContain('dragging');
     
     // ドラッグ開始（dragstart イベントをトリガー）
-    await item.dispatchEvent('dragstart');
+    await itemContent.dispatchEvent('dragstart');
     
     // draggingクラスが追加されることを確認
     await page.waitForTimeout(100);
@@ -86,9 +88,10 @@ test.describe('DnD機能', () => {
     
     expect(count).toBeGreaterThan(1);
     
-    // 各アイテムがdraggable属性を持つことを確認
+    // 各アイテムの.item-contentがdraggable属性を持つことを確認
     for (let i = 0; i < Math.min(count, 3); i++) {
-      const draggable = await items.nth(i).getAttribute('draggable');
+      const itemContent = items.nth(i).locator('.item-content');
+      const draggable = await itemContent.getAttribute('draggable');
       expect(draggable).toBe('true');
     }
   });

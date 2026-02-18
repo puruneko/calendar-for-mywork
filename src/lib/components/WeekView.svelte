@@ -44,6 +44,9 @@ interface Props {
   
   /** 表示週変更時のイベントハンドラ */
   onViewChange?: (newDate: DateTime) => void;
+  
+  /** DnD時の日付変更閾値（0.0-1.0、アイテム幅の何%が別の列に入ったら移動とみなすか） */
+  dayChangeThreshold?: number;
 }
 
 let {
@@ -54,6 +57,7 @@ let {
   tickInterval = 60,
   majorTick = 60,
   minorTick = 15,
+  dayChangeThreshold = 0.75,
   onItemClick,
   onItemMove,
   onItemResize,
@@ -172,8 +176,9 @@ function handleResizeEnd() {
 
 // ドラッグ&ドロップ関連の状態
 let draggedItem = $state<CalendarItem | null>(null);
-let draggedOverDay = $state<DateTime | null>(null);
-let draggedOverY = $state<number | null>(null);
+let draggedItemElement = $state<HTMLElement | null>(null);
+let dragStartX = $state<number>(0);
+let dragStartY = $state<number>(0);
 
 // リサイズ関連の状態
 let resizingItem = $state<CalendarItem | null>(null);
@@ -182,15 +187,45 @@ let resizeStartY = $state<number>(0);
 
 // ドラッグプレビュー（移動先の影）のスタイルを計算
 let dragPreviewStyle = $derived.by(() => {
-  if (!draggedItem || !draggedOverDay || draggedOverY === null) return null;
+  if (!draggedItem || !draggedItemElement) return null;
   if (!draggedItem.start || !draggedItem.end) return null;
   
+  const rect = draggedItemElement.getBoundingClientRect();
   const hourHeight = 60;
-  const hoursFromStart = draggedOverY / hourHeight;
-  const minutesFromStart = hoursFromStart * 60;
+  
+  // アイテムの上端のY座標から時刻を計算
+  let targetDay: DateTime | null = null;
+  let targetMinutes = 0;
+  
+  // どの日の列に最も重なっているかを判定
+  const itemCenterX = rect.left + rect.width / 2;
+  const dayColumns = document.querySelectorAll('.day-column');
+  
+  dayColumns.forEach((col, index) => {
+    const colRect = col.getBoundingClientRect();
+    const overlapLeft = Math.max(rect.left, colRect.left);
+    const overlapRight = Math.min(rect.right, colRect.right);
+    const overlapWidth = Math.max(0, overlapRight - overlapLeft);
+    const overlapRatio = overlapWidth / rect.width;
+    
+    if (overlapRatio >= dayChangeThreshold) {
+      targetDay = weekDays[index];
+      
+      // アイテムの上端から時刻を計算
+      const dayGrid = col.querySelector('.day-grid');
+      if (dayGrid) {
+        const gridRect = dayGrid.getBoundingClientRect();
+        const offsetY = rect.top - gridRect.top;
+        const hoursFromStart = offsetY / hourHeight;
+        targetMinutes = hoursFromStart * 60;
+      }
+    }
+  });
+  
+  if (!targetDay) return null;
   
   // 新しい開始位置を計算（minorTick単位にスナップ）
-  const rawStart = draggedOverDay.startOf('day').set({ hour: startHour }).plus({ minutes: minutesFromStart });
+  const rawStart = targetDay.startOf('day').set({ hour: startHour }).plus({ minutes: targetMinutes });
   const newStart = snapToMinorTick(rawStart, minorTick);
   const dayStart = newStart.startOf('day').set({ hour: startHour });
   const top = newStart.diff(dayStart, 'minutes').minutes;
@@ -200,15 +235,21 @@ let dragPreviewStyle = $derived.by(() => {
   const height = duration;
   
   return {
-    day: draggedOverDay,
+    day: targetDay,
     top: (top / 60) * hourHeight,
-    height: (height / 60) * hourHeight
+    height: (height / 60) * hourHeight,
+    newStart,
+    newEnd: newStart.plus({ minutes: duration })
   };
 });
 
 // ドラッグ開始
 function handleDragStart(event: DragEvent, item: CalendarItem) {
   draggedItem = item;
+  draggedItemElement = event.currentTarget as HTMLElement;
+  dragStartX = event.clientX;
+  dragStartY = event.clientY;
+  
   if (event.dataTransfer) {
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', item.id);
@@ -218,8 +259,9 @@ function handleDragStart(event: DragEvent, item: CalendarItem) {
 // ドラッグ終了
 function handleDragEnd() {
   draggedItem = null;
-  draggedOverDay = null;
-  draggedOverY = null;
+  draggedItemElement = null;
+  dragStartX = 0;
+  dragStartY = 0;
 }
 
 // ドラッグオーバー（日列）
@@ -228,44 +270,23 @@ function handleDayDragOver(event: DragEvent, day: DateTime) {
   if (event.dataTransfer) {
     event.dataTransfer.dropEffect = 'move';
   }
-  draggedOverDay = day;
-  
-  // マウスのY座標を取得
-  const target = event.currentTarget as HTMLElement;
-  const rect = target.getBoundingClientRect();
-  draggedOverY = event.clientY - rect.top;
+  // 新しいロジックでは、dragPreviewStyleが自動的にアイテム位置を追跡
 }
 
 // ドロップ処理
 function handleDrop(event: DragEvent, day: DateTime) {
   event.preventDefault();
   
-  if (!draggedItem || !draggedItem.start || !draggedItem.end) return;
+  if (!draggedItem || !dragPreviewStyle) return;
   
-  // ドロップ位置から時刻を計算
-  const target = event.currentTarget as HTMLElement;
-  const rect = target.getBoundingClientRect();
-  const y = event.clientY - rect.top;
-  
-  const hourHeight = 60; // 1時間あたりのピクセル高さ
-  const hoursFromStart = y / hourHeight;
-  const minutesFromStart = hoursFromStart * 60;
-  
-  // 新しい開始日時を計算（minorTick単位にスナップ）
-  const rawStart = day.startOf('day').set({ hour: startHour }).plus({ minutes: minutesFromStart });
-  const newStart = snapToMinorTick(rawStart, minorTick);
-  
-  // アイテムの期間を維持
-  const duration = draggedItem.end.diff(draggedItem.start, 'minutes').minutes;
-  const newEnd = newStart.plus({ minutes: duration });
-  
-  // イベントを発火
-  onItemMove?.(draggedItem, newStart, newEnd);
+  // dragPreviewStyleで計算済みの新しい開始・終了日時を使用
+  onItemMove?.(draggedItem, dragPreviewStyle.newStart, dragPreviewStyle.newEnd);
   
   // 状態をリセット
   draggedItem = null;
-  draggedOverDay = null;
-  draggedOverY = null;
+  draggedItemElement = null;
+  dragStartX = 0;
+  dragStartY = 0;
 }
 
 // 前の週に移動
@@ -422,9 +443,6 @@ function getItemClass(item: CalendarItem): string {
               <div
                 class="{getItemClass(item)} {draggedItem?.id === item.id ? 'dragging' : ''}"
                 style={getItemStyle(item)}
-                draggable="true"
-                ondragstart={(e) => handleDragStart(e, item)}
-                ondragend={handleDragEnd}
                 onclick={() => handleItemClick(item)}
                 onkeydown={(e) => e.key === 'Enter' && handleItemClick(item)}
                 role="button"
@@ -434,19 +452,31 @@ function getItemClass(item: CalendarItem): string {
                 <div 
                   class="resize-handle resize-handle-top"
                   onmousedown={(e) => handleResizeStart(e, item, 'top')}
+                  role="slider"
+                  aria-label="開始時刻を変更"
                 ></div>
                 
-                <div class="item-title">{item.title}</div>
-                {#if item.start && item.end}
-                  <div class="item-time">
-                    {formatTime(item.start)} - {formatTime(item.end)}
-                  </div>
-                {/if}
+                <!-- アイテム本体（ドラッグ可能） -->
+                <div
+                  class="item-content"
+                  draggable="true"
+                  ondragstart={(e) => handleDragStart(e, item)}
+                  ondragend={handleDragEnd}
+                >
+                  <div class="item-title">{item.title}</div>
+                  {#if item.start && item.end}
+                    <div class="item-time">
+                      {formatTime(item.start)} - {formatTime(item.end)}
+                    </div>
+                  {/if}
+                </div>
                 
                 <!-- リサイズハンドル（下端） -->
                 <div 
                   class="resize-handle resize-handle-bottom"
                   onmousedown={(e) => handleResizeStart(e, item, 'bottom')}
+                  role="slider"
+                  aria-label="終了時刻を変更"
                 ></div>
               </div>
             {/each}
@@ -596,12 +626,13 @@ function getItemClass(item: CalendarItem): string {
     position: absolute;
     left: 4px;
     right: 4px;
-    padding: 4px 8px;
     border-radius: 4px;
     cursor: pointer;
     pointer-events: auto;
     overflow: hidden;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
   }
 
   .calendar-item:hover {
@@ -717,5 +748,12 @@ function getItemClass(item: CalendarItem): string {
 
   .resize-handle:hover {
     background-color: rgba(33, 150, 243, 0.3);
+  }
+
+  /* アイテム本体 */
+  .item-content {
+    padding: 4px 8px;
+    flex: 1;
+    overflow: hidden;
   }
 </style>
