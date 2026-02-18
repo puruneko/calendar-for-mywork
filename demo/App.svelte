@@ -78,6 +78,15 @@ function handleItemMove(item: CalendarItem, newStart: DateTime, newEnd: DateTime
   );
 }
 
+function handleItemResize(item: CalendarItem, newStart: DateTime, newEnd: DateTime) {
+  console.log('Item resized:', item, newStart, newEnd);
+  items = items.map(i =>
+    i.id === item.id
+      ? { ...i, start: newStart, end: newEnd }
+      : i
+  );
+}
+
 function handleViewChange(newDate: DateTime) {
   console.log('View changed:', newDate);
   currentDate = newDate;
@@ -99,6 +108,7 @@ function handleViewChange(newDate: DateTime) {
       tickInterval={60}
       onItemClick={handleItemClick}
       onItemMove={handleItemMove}
+      onItemResize={handleItemResize}
       onViewChange={handleViewChange}
     />
   </main>
