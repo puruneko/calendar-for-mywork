@@ -552,6 +552,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
                         draggable="true"
                         ondragstart={(e) => handleDragStart(e, item, dayIndex, week)}
                         ondragend={handleDragEnd}
+                        onclick={(e) => { e.stopPropagation(); onItemClick?.(item); }}
                         style="
                           background-color: {getItemBgColor(item)};
                           width: {span === 1 ? '100%' : `calc(${span * 100}% + ${(span - 1) * 9}px)`};
@@ -568,7 +569,6 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
                         <!-- バー本体 -->
                         <div 
                           class="bar-content"
-                          onclick={(e) => { e.stopPropagation(); onItemClick?.(item); }}
                         >
                           {item.title}
                         </div>
@@ -699,11 +699,12 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     z-index: 1 !important; /* セルより下に（!importantで通常のz-index: 5を上書き） */
     pointer-events: none; /* イベントを無効化 */
   }
-
-  /* 最前面: ドラッグ中のアイテム */
+  
+  /* 最前層: ドラッグ中のアイテム - セルやその他のアイテムより前面に */
   .calendar-content.dragging-active .multi-day-bar.dragging,
   .calendar-content.dragging-active .month-item.dragging {
-    z-index: 100 !important; /* ドラッグ中のアイテムは最前面 */
+    z-index: 100 !important; /* セルより前面 */
+    pointer-events: none; /* ドラッグ中はイベント受け取らない */
   }
 
   .month-header {
@@ -818,7 +819,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    pointer-events: auto;
+    pointer-events: none;
     padding: 2px 6px;
     display: flex;
     align-items: center;
