@@ -11,16 +11,8 @@ import type { CalendarItem } from '../models';
 import { getWeekDays, formatTime, formatWeekday, generateTimeSlots, snapToMinorTick } from '../utils';
 import SettingsModal from './SettingsModal.svelte';
 
-// Z-index層管理（集中管理）
-const Z_INDEX_LAYERS = {
-  GRID_LINES: 1,           // 横罫線・minorグリッド線
-  DRAG_PREVIEW: 5,         // ドラッグプレビュー
-  CALENDAR_ITEMS: 10,      // カレンダーアイテム
-  RESIZE_HANDLES: 20,      // リサイズハンドル
-  CURRENT_TIME_LINE: 100,  // 現在時刻ライン（最前面）
-  MODAL_BACKDROP: 1000,    // モーダル背景
-  MODAL_CONTENT: 1001,     // モーダルコンテンツ
-} as const;
+// Z-index層管理は CSS変数で集中管理（demo/App.svelte の :global(:root) に定義）
+// このコメントは削除せず、開発者への注意喚起として残す
 
 interface Props {
   /** 表示するアイテムリスト */
@@ -1038,7 +1030,7 @@ function getItemClass(item: CalendarItem): string {
     height: 1px;
     background-color: rgba(0, 0, 0, 0.05);
     pointer-events: none;
-    z-index: 1;
+    z-index: var(--z-base);
   }
 
   /* 現在時刻線 */
@@ -1048,7 +1040,7 @@ function getItemClass(item: CalendarItem): string {
     right: 0;
     height: 2px;
     pointer-events: none;
-    z-index: 100;
+    z-index: var(--z-dnd-dragging);
   }
 
   /* ドラッグプレビュー（移動先の影） */
@@ -1060,7 +1052,7 @@ function getItemClass(item: CalendarItem): string {
     border: 2px dashed rgba(33, 150, 243, 0.4);
     border-radius: 4px;
     pointer-events: none;
-    z-index: 5;
+    z-index: var(--z-timeline);
   }
 
   /* リサイズハンドル */
@@ -1070,7 +1062,7 @@ function getItemClass(item: CalendarItem): string {
     right: 0;
     height: 4px;
     cursor: ns-resize;
-    z-index: 20;
+    z-index: var(--z-resize-handle);
     pointer-events: auto;
     user-select: none;
     -webkit-user-drag: none;
@@ -1107,6 +1099,6 @@ function getItemClass(item: CalendarItem): string {
   /* カレンダーアイテム全体をドラッグ可能にする */
   .calendar-item {
     cursor: move;
-    z-index: 10;
+    z-index: var(--z-cell-expanded);
   }
 </style>

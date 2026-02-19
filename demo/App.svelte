@@ -378,5 +378,16 @@ function handleCellClick(dateTime: DateTime, clickPosition: { x: number; y: numb
     --task-done-bg: #a5d6a7;
     --appointment-bg: #ce93d8;
     --calendar-font-family: 'Segoe UI', sans-serif;
+    
+    /* z-index階層の定義（集中管理） */
+    --z-base: 1;
+    --z-timeline: 5;
+    --z-cell-expanded: 10;
+    --z-resize-handle: 20;
+    --z-dnd-dragging: 100;
+    --z-modal-backdrop: 1000;
+    --z-modal-content: 1001;
+    --z-month-expanded-items: 1000;
+    --z-month-expanded-header: 1001;
   }
 </style>

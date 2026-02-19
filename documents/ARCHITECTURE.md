@@ -301,9 +301,54 @@ interface Appointment extends CalendarItem {
 - **日付計算**: 必ずLuxonを使用（Date型の直接操作禁止）
 - **パフォーマンス**: 最初から最適化しない。問題が出たら対処
 
-## 9. テスト戦略
+## 9. スタイリング規約
 
-### 9.1 単体テスト (Vitest)
+### 9.1 z-index管理
+
+**原則**: z-indexのハードコーディングは**禁止**。CSS変数で集中管理する。
+
+**定義場所**: `demo/App.svelte` の `:global(:root)`
+
+```css
+:global(:root) {
+  /* z-index階層の定義（集中管理） */
+  --z-base: 1;                      /* 基本レベル（グリッド線など） */
+  --z-timeline: 5;                  /* タイムライン、ドラッグプレビュー */
+  --z-cell-expanded: 10;            /* 展開セル、カレンダーアイテム */
+  --z-resize-handle: 20;            /* リサイズハンドル */
+  --z-dnd-dragging: 100;            /* ドラッグ中のアイテム、現在時刻線 */
+  --z-modal-backdrop: 1000;         /* モーダル背景 */
+  --z-modal-content: 1001;          /* モーダルコンテンツ */
+  --z-month-expanded-items: 1000;   /* MonthView展開エリア */
+  --z-month-expanded-header: 1001;  /* MonthView展開時の日付 */
+}
+```
+
+**使用方法**:
+```css
+.calendar-item {
+  z-index: var(--z-cell-expanded);  /* ✅ 正しい */
+}
+
+.modal-backdrop {
+  z-index: 1000;  /* ❌ 禁止：ハードコーディング */
+}
+```
+
+**理由**:
+- 重複や競合を防ぐ
+- 階層構造を一元管理
+- 変更時の影響範囲を最小化
+- 開発者が全体のz-index構造を把握しやすい
+
+**違反時の対応**:
+ハードコードされたz-indexを発見した場合は、即座にCSS変数に置き換える。
+
+---
+
+## 10. テスト戦略
+
+### 10.1 単体テスト (Vitest)
 **実装済み: 33件**
 
 - **dateUtils (10件)**
@@ -318,7 +363,7 @@ interface Appointment extends CalendarItem {
   - スナップ処理
   - 重複チェック
 
-### 9.2 E2Eテスト (Playwright)
+### 10.2 E2Eテスト (Playwright)
 **実装済み: 7ファイル**
 
 - **calendar.spec.ts**: 基本カレンダー機能

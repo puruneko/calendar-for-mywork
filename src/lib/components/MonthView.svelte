@@ -455,7 +455,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
 
   .day-cell.expanded {
     overflow: visible;
-    z-index: 10;
+    z-index: var(--z-cell-expanded);
     min-height: auto;
   }
 
@@ -470,7 +470,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     padding: 4px;
     padding-top: 24px; /* 日付の高さ分を確保 */
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    z-index: 1000; /* 他の全ての要素より前面に */
+    z-index: var(--z-month-expanded-items);
     max-height: none; /* 制限なし */
   }
 
@@ -496,12 +496,12 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     border-radius: 3px;
     display: inline-block;
     position: relative;
-    z-index: 1; /* 通常の表示レベル */
+    z-index: var(--z-base);
   }
 
   /* 展開されたセルの日付は最前面に */
   .day-cell.expanded .day-number {
-    z-index: 1001; /* 展開エリアより前面 */
+    z-index: var(--z-month-expanded-header);
   }
 
   .day-number:hover {
