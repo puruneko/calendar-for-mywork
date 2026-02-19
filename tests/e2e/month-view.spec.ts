@@ -250,11 +250,11 @@ test.describe('MonthView - アイテム表示', () => {
     console.log('[TEST] 日をまたがるアイテムが帯状に表示されることを確認');
     console.log('[REASON] 複数日にまたがるイベントを視覚的に表現する必要がある');
 
-    const multiDayItems = page.locator('.multi-day-item');
-    const count = await multiDayItems.count();
+    const multiDayBars = page.locator('.multi-day-bar');
+    const count = await multiDayBars.count();
 
     if (count > 0) {
-      const firstItem = multiDayItems.first();
+      const firstItem = multiDayBars.first();
       await expect(firstItem).toBeVisible();
 
       // 背景色が設定されているか
@@ -262,7 +262,7 @@ test.describe('MonthView - アイテム表示', () => {
         return window.getComputedStyle(el).backgroundColor;
       });
 
-      console.log(`[INFO] Multi-day item background color: ${bgColor}`);
+      console.log(`[INFO] Multi-day bar background color: ${bgColor}`);
       expect(bgColor).not.toBe('rgba(0, 0, 0, 0)');
 
       console.log('[PASS] Multi-day items are displayed as bands');
@@ -555,19 +555,19 @@ test.describe('MonthView - 複数日にまたがるアイテム', () => {
     console.log('[TEST] 複数日にまたがるアイテムが帯状に表示されることを確認');
     console.log('[REASON] 期間を持つイベントを視覚的に表現する必要がある');
 
-    const multiDayItems = page.locator('.multi-day-item');
-    const count = await multiDayItems.count();
+    const multiDayBars = page.locator('.multi-day-bar');
+    const count = await multiDayBars.count();
 
-    console.log(`[INFO] ${count} multi-day items found`);
+    console.log(`[INFO] ${count} multi-day bars found`);
     expect(count).toBeGreaterThan(0);
 
-    // 最初のアイテムの幅を確認（通常のアイテムより広い）
-    const firstItem = multiDayItems.first();
+    // 最初のアイテムの幅を確認（grid-columnでスパンしている）
+    const firstItem = multiDayBars.first();
     const width = await firstItem.evaluate((el) => {
       return el.getBoundingClientRect().width;
     });
 
-    console.log(`[INFO] Multi-day item width: ${width}px`);
+    console.log(`[INFO] Multi-day bar width: ${width}px`);
     expect(width).toBeGreaterThan(50);
 
     console.log('[PASS] Multi-day items are displayed as bands');
@@ -575,141 +575,89 @@ test.describe('MonthView - 複数日にまたがるアイテム', () => {
 
   test('3日間のワークショップが3日間連続でバー表示されること', async ({ page }) => {
     console.log('[TEST] 3日間のワークショップが3日間連続でバー表示されることを確認');
-    console.log('[REASON] 複数日アイテムが期間中の全ての日に表示される必要がある');
+    console.log('[REASON] 複数日アイテムが週内で連続したバーとして表示される必要がある');
     console.log('[STEP 1] "3日間のワークショップ"アイテムを探す');
 
-    // "3日間のワークショップ"というテキストを含むアイテムを全て取得
-    const workshopItems = page.locator('.multi-day-item:has-text("3日間のワークショップ")');
-    const workshopCount = await workshopItems.count();
+    // "3日間のワークショップ"というテキストを含むバーを取得
+    const workshopBars = page.locator('.multi-day-bar:has-text("3日間のワークショップ")');
+    const workshopCount = await workshopBars.count();
     
-    console.log(`[INFO] Found ${workshopCount} instances of "3日間のワークショップ"`);
+    console.log(`[INFO] Found ${workshopCount} "3日間のワークショップ" bars`);
     
-    // 空のバー（タイトルなし）も含めると3つ以上あるはず
-    const allMultiDayBars = page.locator('.multi-day-item');
-    const allBarsCount = await allMultiDayBars.count();
-    console.log(`[INFO] Total multi-day bars: ${allBarsCount}`);
-
-    console.log('[STEP 2] バーが3日間連続で表示されているか確認');
-    
-    // 3日間のワークショップは、開始日・中間日・終了日の3つのセルに表示される必要がある
-    // ただし、タイトルは開始日にのみ表示される
+    // 新しい実装では、週をまたがない限り1つのバーで3日間をカバーする
     expect(workshopCount).toBeGreaterThanOrEqual(1);
     
-    console.log('[STEP 3] 各日のバーのスタイルを確認');
+    console.log('[STEP 2] バーが複数日にスパンしているか確認');
     
-    // 複数日アイテムのスタイルクラスを確認
-    const multiDayStart = page.locator('.multi-day-start');
-    const multiDayContinue = page.locator('.multi-day-continue');
-    const multiDayEnd = page.locator('.multi-day-end');
+    if (workshopCount > 0) {
+      const firstBar = workshopBars.first();
+      
+      // grid-columnスタイルを確認
+      const gridColumn = await firstBar.evaluate((el) => {
+        return window.getComputedStyle(el).gridColumn;
+      });
+      
+      console.log(`[INFO] Grid column: ${gridColumn}`);
+      
+      // 幅が1日分より広いことを確認
+      const width = await firstBar.evaluate((el) => {
+        return el.getBoundingClientRect().width;
+      });
+      
+      console.log(`[INFO] Bar width: ${width}px`);
+      expect(width).toBeGreaterThan(100); // 3日分なので広いはず
+    }
     
-    const startCount = await multiDayStart.count();
-    const continueCount = await multiDayContinue.count();
-    const endCount = await multiDayEnd.count();
-    
-    console.log(`[INFO] multi-day-start: ${startCount}`);
-    console.log(`[INFO] multi-day-continue: ${continueCount}`);
-    console.log(`[INFO] multi-day-end: ${endCount}`);
-    
-    // 少なくとも1つの開始、継続、終了があるはず
-    expect(startCount).toBeGreaterThanOrEqual(1);
-    
-    console.log('[PASS] Multi-day workshop is displayed across multiple days');
+    console.log('[PASS] Multi-day workshop is displayed as connected bar');
   });
 
-  test('複数日アイテムの開始日にタイトルが表示され、継続日には表示されないこと', async ({ page }) => {
-    console.log('[TEST] 複数日アイテムの開始日にタイトルが表示され、継続日には表示されないことを確認');
-    console.log('[REASON] タイトルは開始日のみに表示し、継続日は空のバーにする必要がある');
+  test('複数日アイテムのバーにタイトルが表示されること', async ({ page }) => {
+    console.log('[TEST] 複数日アイテムのバーにタイトルが表示されることを確認');
+    console.log('[REASON] 新しい実装では1つのバーで複数日をカバーし、タイトルが表示される');
 
-    const multiDayItems = page.locator('.multi-day-item');
-    const count = await multiDayItems.count();
+    const multiDayBars = page.locator('.multi-day-bar');
+    const count = await multiDayBars.count();
 
     if (count > 0) {
-      console.log(`[INFO] ${count} multi-day items found`);
+      console.log(`[INFO] ${count} multi-day bars found`);
       
-      // 各アイテムのテキスト内容を確認
-      for (let i = 0; i < Math.min(count, 10); i++) {
-        const item = multiDayItems.nth(i);
-        const text = await item.textContent();
-        const classes = await item.getAttribute('class');
+      // 各バーにタイトルがあることを確認
+      for (let i = 0; i < Math.min(count, 5); i++) {
+        const bar = multiDayBars.nth(i);
+        const text = await bar.textContent();
         
-        console.log(`[INFO] Item ${i}: "${text}" - classes: ${classes}`);
-        
-        // multi-day-startクラスを持つアイテムはタイトルを持つべき
-        if (classes?.includes('multi-day-start')) {
-          expect(text?.trim().length).toBeGreaterThan(0);
-        }
+        console.log(`[INFO] Bar ${i}: "${text}"`);
+        expect(text?.trim().length).toBeGreaterThan(0);
       }
       
-      console.log('[PASS] Title display logic is correct');
+      console.log('[PASS] Multi-day bars have titles');
     } else {
-      console.log('[INFO] No multi-day items to test');
+      console.log('[INFO] No multi-day bars to test');
     }
   });
 
-  test('複数日アイテムが角丸スタイルで継続を表現していること', async ({ page }) => {
-    console.log('[TEST] 複数日アイテムが角丸スタイルで継続を表現していることを確認');
-    console.log('[REASON] バーの角丸により、開始・継続・終了を視覚的に表現する必要がある');
+  test('複数日アイテムが週エリアに配置されていること', async ({ page }) => {
+    console.log('[TEST] 複数日アイテムが週エリアに配置されていることを確認');
+    console.log('[REASON] 複数日アイテムは.multi-day-area内に表示される');
 
-    // 開始日のバー（右側の角が直角）
-    const startItem = page.locator('.multi-day-start').first();
-    const startCount = await startItem.count();
+    const multiDayAreas = page.locator('.multi-day-area');
+    const areaCount = await multiDayAreas.count();
     
-    if (startCount > 0) {
-      const borderRadius = await startItem.evaluate((el) => {
-        const styles = window.getComputedStyle(el);
-        return {
-          topLeft: styles.borderTopLeftRadius,
-          topRight: styles.borderTopRightRadius,
-          bottomLeft: styles.borderBottomLeftRadius,
-          bottomRight: styles.borderBottomRightRadius,
-        };
-      });
-      
-      console.log(`[INFO] Start item border-radius: ${JSON.stringify(borderRadius)}`);
-      console.log('[PASS] Start item has appropriate border-radius');
-    }
+    console.log(`[INFO] ${areaCount} multi-day areas found (one per week)`);
+    expect(areaCount).toBeGreaterThan(0);
 
-    // 終了日のバー（左側の角が直角）
-    const endItem = page.locator('.multi-day-end').first();
-    const endCount = await endItem.count();
+    // 最初の週エリアに複数日バーがあるか確認
+    const firstArea = multiDayAreas.first();
+    const barsInFirstArea = firstArea.locator('.multi-day-bar');
+    const barCount = await barsInFirstArea.count();
     
-    if (endCount > 0) {
-      const borderRadius = await endItem.evaluate((el) => {
-        const styles = window.getComputedStyle(el);
-        return {
-          topLeft: styles.borderTopLeftRadius,
-          topRight: styles.borderTopRightRadius,
-          bottomLeft: styles.borderBottomLeftRadius,
-          bottomRight: styles.borderBottomRightRadius,
-        };
-      });
-      
-      console.log(`[INFO] End item border-radius: ${JSON.stringify(borderRadius)}`);
-      console.log('[PASS] End item has appropriate border-radius');
-    }
-
-    // 継続日のバー（両側の角が直角）
-    const continueItem = page.locator('.multi-day-continue').first();
-    const continueCount = await continueItem.count();
+    console.log(`[INFO] ${barCount} bars in first multi-day area`);
     
-    if (continueCount > 0) {
-      const borderRadius = await continueItem.evaluate((el) => {
-        const styles = window.getComputedStyle(el);
-        return {
-          topLeft: styles.borderTopLeftRadius,
-          topRight: styles.borderTopRightRadius,
-          bottomLeft: styles.borderBottomLeftRadius,
-          bottomRight: styles.borderBottomRightRadius,
-        };
-      });
-      
-      console.log(`[INFO] Continue item border-radius: ${JSON.stringify(borderRadius)}`);
-      console.log('[PASS] Continue item has appropriate border-radius');
-    }
+    console.log('[PASS] Multi-day items are in week areas');
   });
 });
 
-test.describe('MonthView - +N more機能', () => {
+test.describe('MonthView - +N more機能（セル内展開）', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('http://localhost:5176');
     await page.click('button:has-text("月表示")');
@@ -744,9 +692,9 @@ test.describe('MonthView - +N more機能', () => {
     }
   });
 
-  test('+N moreをクリックするとオーバーレイが表示されること', async ({ page }) => {
-    console.log('[TEST] +N moreをクリックするとオーバーレイが表示されることを確認');
-    console.log('[REASON] すべてのアイテムを表示する手段を提供する必要がある');
+  test('+N moreをクリックするとセルが展開されること', async ({ page }) => {
+    console.log('[TEST] +N moreをクリックするとセルが展開されることを確認');
+    console.log('[REASON] すべてのアイテムをセル内で表示する手段を提供する必要がある');
 
     const moreLink = page.locator('.more-items').first();
     const count = await moreLink.count();
@@ -754,21 +702,22 @@ test.describe('MonthView - +N more機能', () => {
     if (count > 0) {
       await moreLink.click();
       
-      // オーバーレイが表示される
-      const overlay = page.locator('.overlay-backdrop');
-      await expect(overlay).toBeVisible();
+      // セルが展開される（expandedクラスが付与）
+      const expandedCell = page.locator('.day-cell.expanded');
+      await expect(expandedCell).toBeVisible();
 
-      const overlayContent = page.locator('.overlay-content');
-      await expect(overlayContent).toBeVisible();
+      // hideボタンが表示される
+      const hideButton = page.locator('.hide-items');
+      await expect(hideButton).toBeVisible();
 
-      console.log('[PASS] Overlay is displayed on +N more click');
+      console.log('[PASS] Cell is expanded on +N more click');
     } else {
       console.log('[INFO] No +N more links available');
     }
   });
 
-  test('オーバーレイに全アイテムが表示されること', async ({ page }) => {
-    console.log('[TEST] オーバーレイに全アイテムが表示されることを確認');
+  test('展開されたセルに全アイテムが表示されること', async ({ page }) => {
+    console.log('[TEST] 展開されたセルに全アイテムが表示されることを確認');
     console.log('[REASON] 隠れたアイテムも含めて全て表示する必要がある');
 
     const moreLink = page.locator('.more-items').first();
@@ -777,75 +726,52 @@ test.describe('MonthView - +N more機能', () => {
     if (count > 0) {
       await moreLink.click();
       
-      const overlayItems = page.locator('.overlay-item');
-      const overlayItemCount = await overlayItems.count();
+      const expandedCell = page.locator('.day-cell.expanded');
+      const expandedItems = expandedCell.locator('.single-day-item');
+      const expandedItemCount = await expandedItems.count();
 
-      console.log(`[INFO] Overlay shows ${overlayItemCount} items`);
-      expect(overlayItemCount).toBeGreaterThan(3); // MAX_ITEMS_PER_DAYが3なので、4件以上表示されるはず
+      console.log(`[INFO] Expanded cell shows ${expandedItemCount} items`);
+      expect(expandedItemCount).toBeGreaterThan(3); // MAX_ITEMS_PER_DAYが3なので、4件以上表示されるはず
 
-      console.log('[PASS] All items are displayed in overlay');
+      console.log('[PASS] All items are displayed in expanded cell');
     } else {
       console.log('[INFO] No +N more links available');
     }
   });
 
-  test('+N moreを再度クリックするとオーバーレイがトグルで閉じること', async ({ page }) => {
-    console.log('[TEST] +N moreを再度クリックするとオーバーレイがトグルで閉じることを確認');
-    console.log('[REASON] ユーザーが簡単にオーバーレイを開閉できる必要がある');
+  test('hideボタンをクリックするとセルが折りたたまれること', async ({ page }) => {
+    console.log('[TEST] hideボタンをクリックするとセルが折りたたまれることを確認');
+    console.log('[REASON] ユーザーが展開したセルを簡単に閉じられる必要がある');
 
     const moreLink = page.locator('.more-items').first();
     const count = await moreLink.count();
 
     if (count > 0) {
-      // 1回目クリック - 開く
+      // セルを展開
       await moreLink.click();
-      await page.waitForSelector('.overlay-backdrop');
       
-      const overlay = page.locator('.overlay-backdrop');
-      await expect(overlay).toBeVisible();
+      const expandedCell = page.locator('.day-cell.expanded');
+      await expect(expandedCell).toBeVisible();
 
-      // オーバーレイを閉じる（背景クリック）
-      await overlay.click({ position: { x: 10, y: 10 } });
-      await expect(overlay).not.toBeVisible();
+      // hideボタンをクリック
+      const hideButton = page.locator('.hide-items');
+      await hideButton.click();
 
-      // 再度開く
-      await moreLink.click();
-      await page.waitForSelector('.overlay-backdrop');
-      await expect(overlay).toBeVisible();
+      // セルが折りたたまれる（expandedクラスが消える）
+      await expect(expandedCell).not.toBeVisible();
 
-      console.log('[PASS] Overlay can be opened, closed, and reopened (toggle functionality works)');
+      // +N moreが再表示される
+      await expect(moreLink).toBeVisible();
+
+      console.log('[PASS] Cell collapses on hide button click');
     } else {
       console.log('[INFO] No +N more links available');
     }
   });
 
-  test('オーバーレイの背景をクリックすると閉じること', async ({ page }) => {
-    console.log('[TEST] オーバーレイの背景をクリックすると閉じることを確認');
-    console.log('[REASON] ユーザーが直感的にオーバーレイを閉じられる必要がある');
-
-    const moreLink = page.locator('.more-items').first();
-    const count = await moreLink.count();
-
-    if (count > 0) {
-      await moreLink.click();
-      
-      const overlay = page.locator('.overlay-backdrop');
-      await expect(overlay).toBeVisible();
-
-      // 背景をクリック
-      await overlay.click({ position: { x: 10, y: 10 } });
-      
-      await expect(overlay).not.toBeVisible();
-
-      console.log('[PASS] Overlay closes on backdrop click');
-    } else {
-      console.log('[INFO] No +N more links available');
-    }
-  });
-
-  test('オーバーレイの×ボタンをクリックすると閉じること', async ({ page }) => {
-    console.log('[TEST] オーバーレイの×ボタンをクリックすると閉じることを確認');
-    console.log('[REASON] ユーザーが明示的にオーバーレイを閉じる手段を提供する必要がある');
+  test('展開されたセルに青い枠線とシャドウが表示されること', async ({ page }) => {
+    console.log('[TEST] 展開されたセルに青い枠線とシャドウが表示されることを確認');
+    console.log('[REASON] 展開状態を視覚的に明確にする必要がある');
 
     const moreLink = page.locator('.more-items').first();
     const count = await moreLink.count();
@@ -853,41 +779,24 @@ test.describe('MonthView - +N more機能', () => {
     if (count > 0) {
       await moreLink.click();
       
-      const overlay = page.locator('.overlay-backdrop');
-      await expect(overlay).toBeVisible();
-
-      // ×ボタンをクリック
-      const closeButton = page.locator('.overlay-close');
-      await closeButton.click();
+      const expandedCell = page.locator('.day-cell.expanded');
+      const dayItemsDiv = expandedCell.locator('.day-items');
       
-      await expect(overlay).not.toBeVisible();
+      // スタイルを確認
+      const styles = await dayItemsDiv.evaluate((el) => {
+        const computed = window.getComputedStyle(el);
+        return {
+          border: computed.border,
+          boxShadow: computed.boxShadow,
+          position: computed.position,
+        };
+      });
 
-      console.log('[PASS] Overlay closes on close button click');
-    } else {
-      console.log('[INFO] No +N more links available');
-    }
-  });
+      console.log(`[INFO] Expanded cell styles:`, styles);
+      expect(styles.position).toBe('absolute');
+      expect(styles.boxShadow).not.toBe('none');
 
-  test('オーバーレイのアイテムをクリックするとオーバーレイが閉じること', async ({ page }) => {
-    console.log('[TEST] オーバーレイのアイテムをクリックするとオーバーレイが閉じることを確認');
-    console.log('[REASON] アイテム選択後は自動的にオーバーレイを閉じる必要がある');
-
-    const moreLink = page.locator('.more-items').first();
-    const count = await moreLink.count();
-
-    if (count > 0) {
-      await moreLink.click();
-      
-      const overlay = page.locator('.overlay-backdrop');
-      await expect(overlay).toBeVisible();
-
-      // オーバーレイ内のアイテムをクリック
-      const overlayItem = page.locator('.overlay-item').first();
-      await overlayItem.click();
-      
-      await expect(overlay).not.toBeVisible();
-
-      console.log('[PASS] Overlay closes on item click');
+      console.log('[PASS] Expanded cell has proper visual styling');
     } else {
       console.log('[INFO] No +N more links available');
     }

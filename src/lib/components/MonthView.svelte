@@ -21,11 +21,10 @@ let {
   onDayClick,
 }: Props = $props();
 
-// オーバーレイ状態
-let overlayDay: DateTime | null = $state(null);
-let overlayItems: CalendarItem[] = $state([]);
+// セル展開状態（展開されている日を保持）
+let expandedDay: DateTime | null = $state(null);
 
-// 1日あたりの最大表示アイテム数
+// 1日あたりの最大表示アイテム数（通常時）
 const MAX_ITEMS_PER_DAY = 3;
 
 // 月の全ての日付を取得（前月・翌月の日も含む）
@@ -135,23 +134,60 @@ function handleDayNumberClick(event: MouseEvent, day: DateTime) {
   onDayClick?.(day);
 }
 
-// +N more クリック（トグル）
-function handleMoreClick(event: MouseEvent, day: DateTime, dayItems: CalendarItem[]) {
+// +N more クリック（セル展開）
+function handleMoreClick(event: MouseEvent, day: DateTime) {
   event.stopPropagation();
-  
-  // 既に開いている場合はトグルで閉じる
-  if (overlayDay && overlayDay.hasSame(day, 'day')) {
-    closeOverlay();
-  } else {
-    overlayDay = day;
-    overlayItems = dayItems;
-  }
+  expandedDay = day;
 }
 
-// オーバーレイを閉じる
-function closeOverlay() {
-  overlayDay = null;
-  overlayItems = [];
+// hideクリック（セル折りたたみ）
+function handleHideClick(event: MouseEvent) {
+  event.stopPropagation();
+  expandedDay = null;
+}
+
+// セルが展開されているかチェック
+function isExpanded(day: DateTime): boolean {
+  return expandedDay !== null && expandedDay.hasSame(day, 'day');
+}
+
+// 週内の複数日アイテムを取得（週をまたがない範囲で）
+function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, startIndex: number, span: number}> {
+  const result: Array<{item: CalendarItem, startIndex: number, span: number}> = [];
+  const processedItems = new Set<string>();
+  
+  items.forEach(item => {
+    if (!isMultiDayItem(item) || !item.start || !item.end) return;
+    if (processedItems.has(item.id)) return;
+    
+    // この週に含まれるかチェック
+    const weekStart = week[0].startOf('day');
+    const weekEnd = week[6].endOf('day');
+    
+    if (item.start > weekEnd || item.end < weekStart) return;
+    
+    // 週内での開始インデックスとスパンを計算
+    let startIndex = -1;
+    let endIndex = -1;
+    
+    week.forEach((day, index) => {
+      if (item.start!.hasSame(day, 'day') || (item.start! < day.startOf('day') && item.end! >= day.startOf('day'))) {
+        if (startIndex === -1) startIndex = index;
+        if (item.end! >= day.startOf('day')) endIndex = index;
+      }
+    });
+    
+    if (startIndex !== -1 && endIndex !== -1) {
+      result.push({
+        item,
+        startIndex: Math.max(0, startIndex),
+        span: endIndex - Math.max(0, startIndex) + 1
+      });
+      processedItems.add(item.id);
+    }
+  });
+  
+  return result;
 }
 </script>
 
@@ -175,85 +211,71 @@ function closeOverlay() {
   </div>
 
   <!-- カレンダーグリッド -->
-  <div class="calendar-grid">
-    {#each weeks as week}
-      {#each week as day}
-        {@const dayItems = getItemsForDay(day)}
-        {@const isToday = day.hasSame(DateTime.now(), 'day')}
-        {@const isCurrentMonth = day.hasSame(currentDate, 'month')}
-        
-        <div 
-          class="day-cell {isToday ? 'today' : ''} {!isCurrentMonth ? 'other-month' : ''}"
-          onclick={(e) => handleCellClick(e, day)}
-        >
-          <div 
-            class="day-number"
-            onclick={(e) => handleDayNumberClick(e, day)}
-          >
-            {day.day}
-          </div>
-          
-          <div class="day-items">
-            {#each dayItems.slice(0, MAX_ITEMS_PER_DAY) as item (item.id)}
-              {#if isMultiDayItem(item)}
-                {@const multiDayClass = getMultiDayItemClass(item, day)}
-                <div 
-                  class="month-item multi-day-item {multiDayClass}"
-                  style="background-color: {getItemBgColor(item)};"
-                  onclick={(e) => { e.stopPropagation(); onItemClick?.(item); }}
-                >
-                  {#if item.start && item.start.hasSame(day, 'day')}
-                    {item.title}
-                  {:else}
-                    <!-- 継続日は空白またはタイトルなし -->
-                  {/if}
-                </div>
-              {:else}
-                <div 
-                  class="month-item single-day-item"
-                  onclick={(e) => { e.stopPropagation(); onItemClick?.(item); }}
-                >
-                  <span class="item-dot" style="background-color: {getItemBgColor(item)};"></span>
-                  <span class="item-time">{item.start ? formatTime(item.start) : ''}</span>
-                  <span class="item-title">{item.title}</span>
-                </div>
-              {/if}
-            {/each}
-            
-            {#if dayItems.length > MAX_ITEMS_PER_DAY}
-              <div 
-                class="more-items"
-                onclick={(e) => handleMoreClick(e, day, dayItems)}
-              >
-                +{dayItems.length - MAX_ITEMS_PER_DAY} more
-              </div>
-            {/if}
-          </div>
-        </div>
-      {/each}
-    {/each}
-  </div>
-  
-  <!-- オーバーレイ -->
-  {#if overlayDay}
-    <div class="overlay-backdrop" onclick={closeOverlay}>
-      <div class="overlay-content" onclick={(e) => e.stopPropagation()}>
-        <div class="overlay-header">
-          <h3>{overlayDay.toFormat('M月d日')}のすべてのアイテム</h3>
-          <button class="overlay-close" onclick={closeOverlay}>×</button>
-        </div>
-        <div class="overlay-items">
-          {#each overlayItems as item (item.id)}
+  <div class="calendar-body">
+    {#each weeks as week, weekIndex}
+      <div class="week-row">
+        <!-- 複数日アイテムエリア -->
+        <div class="multi-day-area">
+          {#each getMultiDayItemsForWeek(week) as {item, startIndex, span}}
             <div 
-              class="overlay-item"
-              onclick={() => { onItemClick?.(item); closeOverlay(); }}
+              class="multi-day-bar"
+              style="
+                grid-column: {startIndex + 1} / span {span};
+                background-color: {getItemBgColor(item)};
+              "
+              onclick={(e) => { e.stopPropagation(); onItemClick?.(item); }}
             >
-              <div class="overlay-item-dot" style="background-color: {getItemBgColor(item)};"></div>
-              <div class="overlay-item-content">
-                <div class="overlay-item-title">{item.title}</div>
-                {#if item.start && item.end}
-                  <div class="overlay-item-time">
-                    {formatTime(item.start)} - {formatTime(item.end)}
+              {item.title}
+            </div>
+          {/each}
+        </div>
+        
+        <!-- 日セル -->
+        <div class="day-cells">
+          {#each week as day}
+            {@const dayItems = getItemsForDay(day).filter(item => !isMultiDayItem(item))}
+            {@const isToday = day.hasSame(DateTime.now(), 'day')}
+            {@const isCurrentMonth = day.hasSame(currentDate, 'month')}
+            {@const expanded = isExpanded(day)}
+            
+            <div 
+              class="day-cell {isToday ? 'today' : ''} {!isCurrentMonth ? 'other-month' : ''} {expanded ? 'expanded' : ''}"
+              onclick={(e) => handleCellClick(e, day)}
+            >
+              <div 
+                class="day-number"
+                onclick={(e) => handleDayNumberClick(e, day)}
+              >
+                {day.day}
+              </div>
+              
+              <div class="day-items">
+                {#each (expanded ? dayItems : dayItems.slice(0, MAX_ITEMS_PER_DAY)) as item (item.id)}
+                  <div 
+                    class="month-item single-day-item"
+                    onclick={(e) => { e.stopPropagation(); onItemClick?.(item); }}
+                  >
+                    <span class="item-dot" style="background-color: {getItemBgColor(item)};"></span>
+                    <span class="item-time">{item.start ? formatTime(item.start) : ''}</span>
+                    <span class="item-title">{item.title}</span>
+                  </div>
+                {/each}
+                
+                {#if !expanded && dayItems.length > MAX_ITEMS_PER_DAY}
+                  <div 
+                    class="more-items"
+                    onclick={(e) => handleMoreClick(e, day)}
+                  >
+                    +{dayItems.length - MAX_ITEMS_PER_DAY} more
+                  </div>
+                {/if}
+                
+                {#if expanded}
+                  <div 
+                    class="hide-items"
+                    onclick={(e) => handleHideClick(e)}
+                  >
+                    hide
                   </div>
                 {/if}
               </div>
@@ -261,8 +283,9 @@ function closeOverlay() {
           {/each}
         </div>
       </div>
-    </div>
-  {/if}
+    {/each}
+  </div>
+  
 </div>
 
 <style>
@@ -314,14 +337,51 @@ function closeOverlay() {
     color: #666;
   }
 
-  .calendar-grid {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    grid-template-rows: repeat(6, 1fr);
+  .calendar-body {
     flex: 1;
+    overflow-y: auto;
     border-left: 1px solid #e0e0e0;
     border-top: 1px solid #e0e0e0;
-    overflow-y: auto;
+  }
+
+  .week-row {
+    display: flex;
+    flex-direction: column;
+    border-bottom: 1px solid #e0e0e0;
+  }
+
+  .multi-day-area {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    padding: 4px;
+    min-height: 24px;
+    background-color: #fafafa;
+  }
+
+  .multi-day-bar {
+    padding: 2px 6px;
+    font-size: 12px;
+    border-radius: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #333;
+    font-weight: 500;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    min-height: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+  }
+
+  .multi-day-bar:hover {
+    opacity: 0.8;
+  }
+
+  .day-cells {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
   }
 
   .day-cell {
@@ -331,10 +391,32 @@ function closeOverlay() {
     overflow: hidden;
     cursor: pointer;
     min-height: 100px;
+    position: relative;
   }
 
   .day-cell:hover {
     background-color: #f9f9f9;
+  }
+
+  .day-cell.expanded {
+    overflow: visible;
+    z-index: 10;
+    min-height: auto;
+  }
+
+  .day-cell.expanded .day-items {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    background-color: white;
+    border: 2px solid #2196f3;
+    border-radius: 4px;
+    padding: 4px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 100;
+    max-height: 400px;
+    overflow-y: auto;
   }
 
   .day-cell.today {
@@ -377,32 +459,6 @@ function closeOverlay() {
     cursor: pointer;
   }
 
-  .multi-day-item {
-    padding: 2px 6px;
-    font-size: 12px;
-    border-radius: 3px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: #333;
-    font-weight: 500;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-    min-height: 20px;
-  }
-
-  .multi-day-start {
-    border-top-right-radius: 0;
-    border-bottom-right-radius: 0;
-  }
-
-  .multi-day-continue {
-    border-radius: 0;
-  }
-
-  .multi-day-end {
-    border-top-left-radius: 0;
-    border-bottom-left-radius: 0;
-  }
 
   .single-day-item {
     padding: 2px 4px;
@@ -446,106 +502,20 @@ function closeOverlay() {
     text-decoration: underline;
   }
 
-  /* オーバーレイ */
-  .overlay-backdrop {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-  }
-
-  .overlay-content {
-    background: white;
-    border-radius: 8px;
-    padding: 0;
-    max-width: 500px;
-    width: 90%;
-    max-height: 80vh;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  }
-
-  .overlay-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 16px 20px;
-    border-bottom: 1px solid #e0e0e0;
-  }
-
-  .overlay-header h3 {
-    margin: 0;
-    font-size: 18px;
-    font-weight: 600;
-  }
-
-  .overlay-close {
-    background: none;
-    border: none;
-    font-size: 28px;
-    cursor: pointer;
+  .hide-items {
+    font-size: 11px;
     color: #666;
-    padding: 0;
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 4px;
-  }
-
-  .overlay-close:hover {
-    background-color: #f5f5f5;
-  }
-
-  .overlay-items {
-    overflow-y: auto;
-    padding: 12px 20px;
-  }
-
-  .overlay-item {
-    display: flex;
-    gap: 12px;
-    padding: 12px;
-    margin-bottom: 8px;
-    border-radius: 6px;
     cursor: pointer;
-    transition: background-color 0.2s;
-  }
-
-  .overlay-item:hover {
-    background-color: #f5f5f5;
-  }
-
-  .overlay-item-dot {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
+    padding: 4px 8px;
+    text-align: center;
+    border-radius: 2px;
     margin-top: 4px;
-    flex-shrink: 0;
-  }
-
-  .overlay-item-content {
-    flex: 1;
-  }
-
-  .overlay-item-title {
-    font-size: 14px;
+    border-top: 1px solid #e0e0e0;
+    background-color: #f5f5f5;
     font-weight: 500;
-    color: #333;
-    margin-bottom: 4px;
   }
 
-  .overlay-item-time {
-    font-size: 12px;
-    color: #666;
+  .hide-items:hover {
+    background-color: #e0e0e0;
   }
 </style>
