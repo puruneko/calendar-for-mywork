@@ -4,7 +4,7 @@
  */
 
 import { DateTime } from 'luxon';
-import { WeekView } from '../src/lib/components';
+import { CalendarView } from '../src/lib/components';
 import type { CalendarItem, Task, Appointment } from '../src/lib/models';
 
 // サンプルデータ
@@ -150,6 +150,7 @@ let items = $state<CalendarItem[]>([
 ]);
 
 let currentDate = $state(DateTime.now());
+let viewType = $state<'week' | 'month'>('week');
 
 // カレンダー設定
 let startHour = $state(8);
@@ -231,9 +232,10 @@ function handleCellClick(dateTime: DateTime, clickPosition: { x: number; y: numb
   </header>
   
   <main class="app-main">
-    <WeekView
+    <CalendarView
       {items}
       {currentDate}
+      bind:viewType
       {startHour}
       {endHour}
       {minorTick}
@@ -244,7 +246,6 @@ function handleCellClick(dateTime: DateTime, clickPosition: { x: number; y: numb
       {itemRightMargin}
       {showParent}
       {parentDisplayIndex}
-      tickInterval={60}
       onItemClick={handleItemClick}
       onItemMove={handleItemMove}
       onItemResize={handleItemResize}
