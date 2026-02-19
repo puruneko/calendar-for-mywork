@@ -171,17 +171,23 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     let endIndex = -1;
     
     week.forEach((day, index) => {
-      if (item.start!.hasSame(day, 'day') || (item.start! < day.startOf('day') && item.end! >= day.startOf('day'))) {
-        if (startIndex === -1) startIndex = index;
-        if (item.end! >= day.startOf('day')) endIndex = index;
+      const dayStart = day.startOf('day');
+      const dayEnd = day.endOf('day');
+      
+      // このアイテムがこの日に含まれるか
+      if (item.start! <= dayEnd && item.end! >= dayStart) {
+        if (startIndex === -1) {
+          startIndex = index;
+        }
+        endIndex = index;
       }
     });
     
     if (startIndex !== -1 && endIndex !== -1) {
       result.push({
         item,
-        startIndex: Math.max(0, startIndex),
-        span: endIndex - Math.max(0, startIndex) + 1
+        startIndex,
+        span: endIndex - startIndex + 1
       });
       processedItems.add(item.id);
     }
