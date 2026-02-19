@@ -42,7 +42,7 @@ function getMonthDays(date: DateTime): DateTime[] {
 let monthDays = $derived(getMonthDays(currentDate));
 
 // 週ごとにグループ化
-let weeks = $derived(() => {
+let weeks = $derived.by(() => {
   const result: DateTime[][] = [];
   for (let i = 0; i < 6; i++) {
     result.push(monthDays.slice(i * 7, (i + 1) * 7));
