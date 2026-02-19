@@ -54,6 +54,9 @@ interface Props {
   /** 終日イベントを表示するかどうか */
   showAllDay?: boolean;
   
+  /** アイテムの色のデフォルト透明度（0-1） */
+  defaultColorOpacity?: number;
+  
   /** 設定変更時のイベントハンドラ */
   onSettingsChange?: (settings: {
     minorTick: number;
@@ -75,6 +78,7 @@ let {
   dayChangeThreshold = 0.75,
   showWeekend = true,
   showAllDay = true,
+  defaultColorOpacity = 0.5,
   onItemClick,
   onItemMove,
   onItemResize,
@@ -454,7 +458,35 @@ function handleSettingsChange(settings: {
   onSettingsChange?.(settings);
 }
 
-// アイテムの位置とサイズを計算（横幅調整あり）
+// カラー値に透明度を追加（透明度指定がない場合のみ）
+function applyDefaultOpacity(color: string | undefined, opacity: number): string | undefined {
+  if (!color) return undefined;
+  
+  // rgb/rgba/hsl/hsla形式をチェック
+  if (color.includes('rgb') || color.includes('hsl')) {
+    // すでにalphaが指定されている場合はそのまま
+    if (color.includes('rgba') || color.includes('hsla')) {
+      return color;
+    }
+    // rgb() -> rgba(), hsl() -> hsla()に変換
+    if (color.startsWith('rgb(')) {
+      return color.replace('rgb(', 'rgba(').replace(')', `, ${opacity})`);
+    }
+    if (color.startsWith('hsl(')) {
+      return color.replace('hsl(', 'hsla(').replace(')', `, ${opacity})`);
+    }
+  }
+  
+  // HEXカラー (#fff, #ffffff)の場合、color-mixで透明度を追加
+  if (color.startsWith('#')) {
+    return `color-mix(in srgb, ${color} ${opacity * 100}%, transparent)`;
+  }
+  
+  // その他の色名やCSS変数の場合もcolor-mixで透明度を追加
+  return `color-mix(in srgb, ${color} ${opacity * 100}%, transparent)`;
+}
+
+// アイテムの位置とサイズを計算（横幅調整あり + カスタムスタイル適用）
 function getItemStyle(item: CalendarItem & { left?: number; width?: number }): string {
   if (!item.start || !item.end) return '';
   
@@ -470,11 +502,38 @@ function getItemStyle(item: CalendarItem & { left?: number; width?: number }): s
   const left = item.left !== undefined ? `${item.left}%` : '4px';
   const right = item.width !== undefined ? `${100 - item.left! - item.width}%` : '4px';
   
-  if (item.left !== undefined && item.width !== undefined) {
-    return `top: ${top}px; height: ${height}px; left: ${left}; right: ${right};`;
+  // 基本スタイル
+  let styleStr = item.left !== undefined && item.width !== undefined
+    ? `top: ${top}px; height: ${height}px; left: ${left}; right: ${right};`
+    : `top: ${top}px; height: ${height}px;`;
+  
+  // カスタムスタイルを適用
+  if (item.style) {
+    const customStyles: string[] = [];
+    
+    for (const [key, value] of Object.entries(item.style)) {
+      if (value !== undefined && value !== null && value !== '') {
+        // キャメルケースをケバブケースに変換 (backgroundColor -> background-color)
+        const cssKey = key.replace(/([A-Z])/g, '-$1').toLowerCase();
+        
+        // colorプロパティの場合、透明度を自動追加
+        if ((cssKey === 'color' || cssKey === 'background-color' || cssKey === 'background') && typeof value === 'string') {
+          const colorWithOpacity = applyDefaultOpacity(value, defaultColorOpacity);
+          if (colorWithOpacity) {
+            customStyles.push(`${cssKey}: ${colorWithOpacity}`);
+          }
+        } else {
+          customStyles.push(`${cssKey}: ${value}`);
+        }
+      }
+    }
+    
+    if (customStyles.length > 0) {
+      styleStr += ' ' + customStyles.join('; ') + ';';
+    }
   }
   
-  return `top: ${top}px; height: ${height}px;`;
+  return styleStr;
 }
 
 // アイテムのCSSクラスを取得
@@ -780,29 +839,25 @@ function getItemClass(item: CalendarItem): string {
 
   /* Task スタイル - 柔軟で動かしやすいデザイン */
   .task {
-    background: var(--task-bg, rgba(224, 224, 224, 0.85));
-    border-left: 4px solid #9e9e9e;
+    /* background: var(--task-bg, rgba(224, 224, 224, 0.85)); */
+    background: color-mix(in srgb, var(--task-todo-bg) 50%, transparent);
     border-radius: 4px;
   }
 
   .task.task-todo {
-    background: var(--task-todo-bg, rgba(224, 224, 224, 0.85));
-    border-left: 4px dashed #9e9e9e; /* 破線で未着手を表現 */
+    /* background: var(--task-todo-bg, rgba(224, 224, 224, 0.85)); */
   }
 
   .task.task-doing {
-    background: var(--task-doing-bg, rgba(224, 224, 224, 0.85));
-    border-left: 4px solid #9e9e9e; /* 実線で進行中を表現 */
+    /* background: var(--task-doing-bg, rgba(224, 224, 224, 0.85)); */
   }
 
   .task.task-done {
-    background: var(--task-done-bg, rgba(224, 224, 224, 0.85));
-    border-left: 4px double #9e9e9e; /* 二重線で完了を表現 */
+    /* background: var(--task-done-bg, rgba(224, 224, 224, 0.85)); */
   }
 
   .task.task-undefined {
     background: rgba(224, 224, 224, 0.85);
-    border-left: 4px dotted #9e9e9e; /* 点線で未定義を表現 */
   }
 
   /* Appointment スタイル - 固定的で動かしにくいデザイン */

@@ -59,6 +59,88 @@ let items = $state<CalendarItem[]>([
     start: DateTime.now().plus({ days: 3 }).set({ hour: 12, minute: 0, second: 0, millisecond: 0 }),
     end: DateTime.now().plus({ days: 3 }).set({ hour: 13, minute: 0, second: 0, millisecond: 0 }),
   } as Appointment,
+  
+  // カスタムスタイルのサンプル
+  {
+    id: '7',
+    type: 'task',
+    title: 'カスタムスタイル1 (赤背景)',
+    start: DateTime.now().set({ hour: 16, minute: 0, second: 0, millisecond: 0 }),
+    end: DateTime.now().set({ hour: 17, minute: 30, second: 0, millisecond: 0 }),
+    status: 'todo',
+    style: {
+      backgroundColor: '#ff5252',
+      color: '#ffffff',
+      fontWeight: 'bold',
+    },
+  } as Task,
+  {
+    id: '8',
+    type: 'task',
+    title: 'カスタムスタイル2 (緑背景+斜体)',
+    start: DateTime.now().plus({ days: 1 }).set({ hour: 13, minute: 0, second: 0, millisecond: 0 }),
+    end: DateTime.now().plus({ days: 1 }).set({ hour: 14, minute: 30, second: 0, millisecond: 0 }),
+    status: 'doing',
+    style: {
+      backgroundColor: '#4caf50',
+      color: '#fff',
+      fontStyle: 'italic',
+      borderRadius: '8px',
+    },
+  } as Task,
+  {
+    id: '9',
+    type: 'appointment',
+    title: 'カスタムスタイル3 (青背景+影)',
+    start: DateTime.now().plus({ days: 1 }).set({ hour: 15, minute: 30, second: 0, millisecond: 0 }),
+    end: DateTime.now().plus({ days: 1 }).set({ hour: 17, minute: 0, second: 0, millisecond: 0 }),
+    style: {
+      backgroundColor: 'rgb(33, 150, 243)',
+      color: '#ffffff',
+      boxShadow: '0 4px 12px rgba(33, 150, 243, 0.4)',
+      border: '2px solid #1976d2',
+    },
+  } as Appointment,
+  {
+    id: '10',
+    type: 'task',
+    title: 'カスタムスタイル4 (グラデーション)',
+    start: DateTime.now().plus({ days: 2 }).set({ hour: 9, minute: 0, second: 0, millisecond: 0 }),
+    end: DateTime.now().plus({ days: 2 }).set({ hour: 10, minute: 30, second: 0, millisecond: 0 }),
+    status: 'done',
+    style: {
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      color: '#fff',
+      fontWeight: '600',
+      borderRadius: '12px',
+    },
+  } as Task,
+  {
+    id: '11',
+    type: 'appointment',
+    title: 'カスタムスタイル5 (オレンジ+点線)',
+    start: DateTime.now().plus({ days: 4 }).set({ hour: 11, minute: 0, second: 0, millisecond: 0 }),
+    end: DateTime.now().plus({ days: 4 }).set({ hour: 12, minute: 30, second: 0, millisecond: 0 }),
+    style: {
+      backgroundColor: '#ff9800',
+      color: '#333',
+      border: '3px dotted #f57c00',
+      fontSize: '14px',
+    },
+  } as Appointment,
+  {
+    id: '12',
+    type: 'task',
+    title: 'カスタムスタイル6 (透明度指定済み)',
+    start: DateTime.now().plus({ days: 2 }).set({ hour: 11, minute: 0, second: 0, millisecond: 0 }),
+    end: DateTime.now().plus({ days: 2 }).set({ hour: 12, minute: 0, second: 0, millisecond: 0 }),
+    status: 'todo',
+    style: {
+      backgroundColor: 'rgba(156, 39, 176, 0.9)', // 透明度指定済み（上書きされない）
+      color: '#fff',
+      textDecoration: 'underline',
+    },
+  } as Task,
 ]);
 
 let currentDate = $state(DateTime.now());

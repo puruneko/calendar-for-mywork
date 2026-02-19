@@ -26,4 +26,7 @@ export interface CalendarItem {
   
   /** 詳細説明 */
   description?: string;
+  
+  /** カスタムスタイル（CSSプロパティ） */
+  style?: Partial<CSSStyleDeclaration>;
 }
