@@ -27,6 +27,7 @@ type Props = {
   onCellClick?: (dateTime: DateTime, clickPosition: { x: number; y: number }) => void;
   onSettingsChange?: (settings: any) => void;
   onViewTypeChange?: (viewType: ViewType) => void;
+  onDayClick?: (date: DateTime) => void;
 };
 
 let {
@@ -50,6 +51,7 @@ let {
   onCellClick,
   onSettingsChange,
   onViewTypeChange,
+  onDayClick,
 }: Props = $props();
 
 function switchToWeek() {
@@ -60,6 +62,14 @@ function switchToWeek() {
 function switchToMonth() {
   viewType = 'month';
   onViewTypeChange?.('month');
+}
+
+function handleDayClick(date: DateTime) {
+  // 週表示に切り替えて、その日を表示
+  viewType = 'week';
+  onViewChange?.(date);
+  onViewTypeChange?.('week');
+  onDayClick?.(date);
 }
 </script>
 
@@ -109,6 +119,7 @@ function switchToMonth() {
       {onItemClick}
       {onViewChange}
       {onCellClick}
+      onDayClick={handleDayClick}
     />
   {/if}
 </div>

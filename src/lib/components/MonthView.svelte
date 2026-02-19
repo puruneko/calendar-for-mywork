@@ -9,6 +9,7 @@ type Props = {
   onItemClick?: (item: CalendarItem) => void;
   onViewChange?: (date: DateTime) => void;
   onCellClick?: (dateTime: DateTime, clickPosition: { x: number; y: number }) => void;
+  onDayClick?: (date: DateTime) => void;
 };
 
 let {
@@ -17,6 +18,7 @@ let {
   onItemClick,
   onViewChange,
   onCellClick,
+  onDayClick,
 }: Props = $props();
 
 // 月の全ての日付を取得（前月・翌月の日も含む）
@@ -98,6 +100,12 @@ function handleCellClick(event: MouseEvent, day: DateTime) {
   };
   onCellClick?.(day.startOf('day'), clickPosition);
 }
+
+// 日付番号クリック
+function handleDayNumberClick(event: MouseEvent, day: DateTime) {
+  event.stopPropagation();
+  onDayClick?.(day);
+}
 </script>
 
 <div class="month-view">
@@ -131,7 +139,12 @@ function handleCellClick(event: MouseEvent, day: DateTime) {
           class="day-cell {isToday ? 'today' : ''} {!isCurrentMonth ? 'other-month' : ''}"
           onclick={(e) => handleCellClick(e, day)}
         >
-          <div class="day-number">{day.day}</div>
+          <div 
+            class="day-number"
+            onclick={(e) => handleDayNumberClick(e, day)}
+          >
+            {day.day}
+          </div>
           
           <div class="day-items">
             {#each dayItems as item (item.id)}
@@ -219,6 +232,7 @@ function handleCellClick(event: MouseEvent, day: DateTime) {
     flex: 1;
     border-left: 1px solid #e0e0e0;
     border-top: 1px solid #e0e0e0;
+    overflow-y: auto;
   }
 
   .day-cell {
@@ -251,12 +265,23 @@ function handleCellClick(event: MouseEvent, day: DateTime) {
     font-weight: 500;
     margin-bottom: 4px;
     color: #333;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 3px;
+    display: inline-block;
+  }
+
+  .day-number:hover {
+    background-color: rgba(33, 150, 243, 0.1);
+    color: #2196f3;
   }
 
   .day-items {
     display: flex;
     flex-direction: column;
     gap: 2px;
+    overflow-y: auto;
+    flex: 1;
   }
 
   .month-item {

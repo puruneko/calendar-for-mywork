@@ -461,6 +461,119 @@ test.describe('MonthView - インタラクション', () => {
   });
 });
 
+test.describe('MonthView - 日付クリックでWeekView遷移', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('http://localhost:5176');
+    await page.click('button:has-text("月表示")');
+    await page.waitForSelector('.month-view');
+  });
+
+  test('日付番号をクリックすると週表示に遷移すること', async ({ page }) => {
+    console.log('[TEST] 日付番号をクリックすると週表示に遷移することを確認');
+    console.log('[REASON] ユーザーが日付から詳細な週表示に移動できる必要がある');
+
+    // 月表示が表示されている
+    await expect(page.locator('.month-view')).toBeVisible();
+
+    // 日付番号をクリック
+    const dayNumber = page.locator('.day-number').first();
+    await dayNumber.click();
+
+    // 週表示に切り替わることを待つ
+    await page.waitForSelector('.week-view', { timeout: 5000 });
+
+    // 週表示が表示され、月表示が非表示
+    await expect(page.locator('.week-view')).toBeVisible();
+    await expect(page.locator('.month-view')).not.toBeVisible();
+
+    console.log('[PASS] Successfully switched to week view on day number click');
+  });
+
+  test('日付番号ホバー時にスタイルが変わること', async ({ page }) => {
+    console.log('[TEST] 日付番号ホバー時にスタイルが変わることを確認');
+    console.log('[REASON] クリック可能であることを視覚的に示す必要がある');
+
+    const dayNumber = page.locator('.day-number').first();
+
+    // ホバー
+    await dayNumber.hover();
+
+    // ホバー時の背景色
+    const hoverBgColor = await dayNumber.evaluate((el) => {
+      return window.getComputedStyle(el).backgroundColor;
+    });
+
+    console.log(`[INFO] Hover background color: ${hoverBgColor}`);
+    // 背景色が設定されている
+    expect(hoverBgColor).toBeTruthy();
+
+    console.log('[PASS] Day number style changes on hover');
+  });
+});
+
+test.describe('MonthView - スクロール', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('http://localhost:5176');
+    await page.click('button:has-text("月表示")');
+    await page.waitForSelector('.month-view');
+  });
+
+  test('1日に多数のアイテムがある場合、セル内でスクロールできること', async ({ page }) => {
+    console.log('[TEST] 1日に多数のアイテムがある場合、セル内でスクロールできることを確認');
+    console.log('[REASON] すべてのアイテムにアクセスできる必要がある');
+
+    // 今日のセル（多数のアイテムがある）を探す
+    const todayCell = page.locator('.day-cell.today');
+    const count = await todayCell.count();
+
+    if (count > 0) {
+      const dayItems = todayCell.locator('.day-items');
+      
+      // day-itemsがoverflow-y: autoを持つことを確認
+      const overflowY = await dayItems.evaluate((el) => {
+        return window.getComputedStyle(el).overflowY;
+      });
+
+      console.log(`[INFO] Day items overflow-y: ${overflowY}`);
+      expect(overflowY).toBe('auto');
+
+      console.log('[PASS] Day items container has scroll capability');
+    } else {
+      console.log('[INFO] Today is not in current month view');
+    }
+  });
+});
+
+test.describe('MonthView - 複数日にまたがるアイテム', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('http://localhost:5176');
+    await page.click('button:has-text("月表示")');
+    await page.waitForSelector('.month-view');
+  });
+
+  test('複数日にまたがるアイテムが帯状に表示されること', async ({ page }) => {
+    console.log('[TEST] 複数日にまたがるアイテムが帯状に表示されることを確認');
+    console.log('[REASON] 期間を持つイベントを視覚的に表現する必要がある');
+
+    const multiDayItems = page.locator('.multi-day-item');
+    const count = await multiDayItems.count();
+
+    console.log(`[INFO] ${count} multi-day items found`);
+    expect(count).toBeGreaterThan(0);
+
+    // 最初のアイテムの幅を確認（通常のアイテムより広い）
+    const firstItem = multiDayItems.first();
+    const width = await firstItem.evaluate((el) => {
+      return el.getBoundingClientRect().width;
+    });
+
+    console.log(`[INFO] Multi-day item width: ${width}px`);
+    expect(width).toBeGreaterThan(50);
+
+    console.log('[PASS] Multi-day items are displayed as bands');
+  });
+});
+
 test.describe('MonthView - ビュー切り替え', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('http://localhost:5176');

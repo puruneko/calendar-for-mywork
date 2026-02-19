@@ -66,6 +66,88 @@ let items = $state<CalendarItem[]>([
     // parentsなし（トップレベル）
   } as Appointment,
   
+  // 複数日にまたがるアイテム
+  {
+    id: '13',
+    type: 'task',
+    title: '3日間のワークショップ',
+    start: DateTime.now().plus({ days: 1 }).set({ hour: 9, minute: 0, second: 0, millisecond: 0 }),
+    end: DateTime.now().plus({ days: 3 }).set({ hour: 17, minute: 0, second: 0, millisecond: 0 }),
+    status: 'doing',
+    parents: ['研修プログラム'],
+  } as Task,
+  {
+    id: '14',
+    type: 'appointment',
+    title: '出張（大阪）',
+    start: DateTime.now().plus({ days: 5 }).set({ hour: 8, minute: 0, second: 0, millisecond: 0 }),
+    end: DateTime.now().plus({ days: 7 }).set({ hour: 20, minute: 0, second: 0, millisecond: 0 }),
+    parents: ['営業活動'],
+  } as Appointment,
+  
+  // 1日に8件以上のアイテム（今日）
+  {
+    id: '15',
+    type: 'task',
+    title: '朝会',
+    start: DateTime.now().set({ hour: 9, minute: 0, second: 0, millisecond: 0 }),
+    end: DateTime.now().set({ hour: 9, minute: 30, second: 0, millisecond: 0 }),
+    status: 'done',
+  } as Task,
+  {
+    id: '16',
+    type: 'appointment',
+    title: 'クライアントA打ち合わせ',
+    start: DateTime.now().set({ hour: 10, minute: 0, second: 0, millisecond: 0 }),
+    end: DateTime.now().set({ hour: 11, minute: 0, second: 0, millisecond: 0 }),
+  } as Appointment,
+  {
+    id: '17',
+    type: 'task',
+    title: '要件定義書レビュー',
+    start: DateTime.now().set({ hour: 11, minute: 0, second: 0, millisecond: 0 }),
+    end: DateTime.now().set({ hour: 12, minute: 0, second: 0, millisecond: 0 }),
+    status: 'doing',
+  } as Task,
+  {
+    id: '18',
+    type: 'task',
+    title: 'バグ修正#1234',
+    start: DateTime.now().set({ hour: 13, minute: 0, second: 0, millisecond: 0 }),
+    end: DateTime.now().set({ hour: 14, minute: 0, second: 0, millisecond: 0 }),
+    status: 'doing',
+  } as Task,
+  {
+    id: '19',
+    type: 'appointment',
+    title: '部署会議',
+    start: DateTime.now().set({ hour: 15, minute: 0, second: 0, millisecond: 0 }),
+    end: DateTime.now().set({ hour: 16, minute: 0, second: 0, millisecond: 0 }),
+  } as Appointment,
+  {
+    id: '20',
+    type: 'task',
+    title: '週報作成',
+    start: DateTime.now().set({ hour: 16, minute: 0, second: 0, millisecond: 0 }),
+    end: DateTime.now().set({ hour: 16, minute: 30, second: 0, millisecond: 0 }),
+    status: 'todo',
+  } as Task,
+  {
+    id: '21',
+    type: 'task',
+    title: 'メール返信',
+    start: DateTime.now().set({ hour: 16, minute: 30, second: 0, millisecond: 0 }),
+    end: DateTime.now().set({ hour: 17, minute: 0, second: 0, millisecond: 0 }),
+    status: 'todo',
+  } as Task,
+  {
+    id: '22',
+    type: 'appointment',
+    title: '1on1ミーティング',
+    start: DateTime.now().set({ hour: 17, minute: 0, second: 0, millisecond: 0 }),
+    end: DateTime.now().set({ hour: 17, minute: 30, second: 0, millisecond: 0 }),
+  } as Appointment,
+  
   // カスタムスタイルのサンプル
   {
     id: '7',
