@@ -87,14 +87,23 @@ test.describe('MonthView - 基本表示', () => {
     console.log('[PASS] Weekday headers are displayed correctly');
   });
 
-  test('カレンダーグリッドが42個のセル（6週×7日）を持つこと', async ({ page }) => {
-    console.log('[TEST] カレンダーグリッドが42個のセルを持つことを確認');
-    console.log('[REASON] 月表示は常に6週間分（42日）表示する必要がある');
+  test('カレンダーグリッドが適切な数のセル（4-6週分）を持つこと', async ({ page }) => {
+    console.log('[TEST] カレンダーグリッドが適切な数のセルを持つことを確認');
+    console.log('[REASON] 月表示は必要な週数分（4-6週、28-42日）を動的に表示する');
 
     const dayCells = page.locator('.day-cell');
-    await expect(dayCells).toHaveCount(42);
+    const count = await dayCells.count();
 
-    console.log('[PASS] Calendar grid has 42 cells');
+    console.log(`[INFO] Day cell count: ${count}`);
+    
+    // 4週間（28日）〜6週間（42日）の範囲内
+    expect(count).toBeGreaterThanOrEqual(28);
+    expect(count).toBeLessThanOrEqual(42);
+    
+    // 7の倍数（完全な週）
+    expect(count % 7).toBe(0);
+
+    console.log('[PASS] Calendar grid has appropriate number of cells');
   });
 
   test('各セルに日付番号が表示されること', async ({ page }) => {

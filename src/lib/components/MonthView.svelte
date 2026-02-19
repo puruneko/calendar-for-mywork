@@ -42,19 +42,17 @@ function getMonthDays(date: DateTime): DateTime[] {
   // 月末の曜日
   const endWeekday = endOfMonth.weekday; // 1=月曜、7=日曜
   
-  // カレンダー表示終了日
-  // 月末が日曜(7)の場合は翌月の最初の週まで含める
-  let calendarEnd: DateTime;
-  if (endWeekday === 7) {
-    // 日曜日で終わる場合、翌週の日曜日まで
-    calendarEnd = endOfMonth.plus({ days: 7 });
-  } else {
-    // それ以外は、その週の日曜日まで
-    calendarEnd = endOfMonth.plus({ days: 7 - endWeekday });
-  }
+  // カレンダー表示終了日（その週の日曜日）
+  // まずその週の日曜日を求める（日単位で計算）
+  const thisWeekSunday = endOfMonth.startOf('day').plus({ days: 7 - endWeekday });
   
-  // 日数を計算
-  const dayCount = Math.ceil(calendarEnd.diff(calendarStart, 'days').days) + 1;
+  // 月末が日曜の場合は、翌週の日曜日まで
+  const calendarEnd = endWeekday === 7 
+    ? endOfMonth.startOf('day').plus({ days: 7 })
+    : thisWeekSunday;
+  
+  // 日数を計算（開始日から終了日まで、両端を含む）
+  const dayCount = Math.floor(calendarEnd.diff(calendarStart, 'days').days) + 1;
   
   const days: DateTime[] = [];
   for (let i = 0; i < dayCount; i++) {
@@ -178,13 +176,16 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
   const result: Array<{item: CalendarItem, startIndex: number, span: number}> = [];
   const processedItems = new Set<string>();
   
+  // 週が空の場合は早期リターン
+  if (week.length === 0) return result;
+  
   items.forEach(item => {
     if (!isMultiDayItem(item) || !item.start || !item.end) return;
     if (processedItems.has(item.id)) return;
     
     // この週に含まれるかチェック
     const weekStart = week[0].startOf('day');
-    const weekEnd = week[6].endOf('day');
+    const weekEnd = week[week.length - 1].endOf('day'); // 最後の日を使用
     
     if (item.start > weekEnd || item.end < weekStart) return;
     
