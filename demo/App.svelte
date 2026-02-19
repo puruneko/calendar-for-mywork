@@ -119,8 +119,8 @@ let items = $state<CalendarItem[]>([
     id: '11',
     type: 'appointment',
     title: 'カスタムスタイル5 (オレンジ+点線)',
-    start: DateTime.now().plus({ days: 4 }).set({ hour: 11, minute: 0, second: 0, millisecond: 0 }),
-    end: DateTime.now().plus({ days: 4 }).set({ hour: 12, minute: 30, second: 0, millisecond: 0 }),
+    start: DateTime.now().plus({ days: 3 }).set({ hour: 14, minute: 0, second: 0, millisecond: 0 }),
+    end: DateTime.now().plus({ days: 3 }).set({ hour: 15, minute: 30, second: 0, millisecond: 0 }),
     style: {
       backgroundColor: '#ff9800',
       color: '#333',

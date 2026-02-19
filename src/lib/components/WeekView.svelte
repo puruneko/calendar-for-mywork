@@ -462,6 +462,11 @@ function handleSettingsChange(settings: {
 function applyDefaultOpacity(color: string | undefined, opacity: number): string | undefined {
   if (!color) return undefined;
   
+  // linear-gradient, radial-gradient, conic-gradientなどの複雑な値はそのまま返す
+  if (color.includes('gradient') || color.includes('url(')) {
+    return color;
+  }
+  
   // rgb/rgba/hsl/hsla形式をチェック
   if (color.includes('rgb') || color.includes('hsl')) {
     // すでにalphaが指定されている場合はそのまま
