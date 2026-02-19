@@ -135,11 +135,17 @@ function handleDayNumberClick(event: MouseEvent, day: DateTime) {
   onDayClick?.(day);
 }
 
-// +N more クリック
-function handleMoreClick(event: MouseEvent, day: DateTime, items: CalendarItem[]) {
+// +N more クリック（トグル）
+function handleMoreClick(event: MouseEvent, day: DateTime, dayItems: CalendarItem[]) {
   event.stopPropagation();
-  overlayDay = day;
-  overlayItems = items;
+  
+  // 既に開いている場合はトグルで閉じる
+  if (overlayDay && overlayDay.hasSame(day, 'day')) {
+    closeOverlay();
+  } else {
+    overlayDay = day;
+    overlayItems = dayItems;
+  }
 }
 
 // オーバーレイを閉じる
@@ -189,10 +195,10 @@ function closeOverlay() {
           
           <div class="day-items">
             {@const visibleItems = dayItems.slice(0, MAX_ITEMS_PER_DAY)}
-            {@const hiddenCount = dayItems.length - MAX_ITEMS_PER_DAY}
+            {@const hiddenCount = Math.max(0, dayItems.length - MAX_ITEMS_PER_DAY)}
             
             {#each visibleItems as item (item.id)}
-              {#if isMultiDayItem(item) && isItemInDay(item, day)}
+              {#if isMultiDayItem(item)}
                 {@const multiDayClass = getMultiDayItemClass(item, day)}
                 <div 
                   class="month-item multi-day-item {multiDayClass}"
@@ -201,9 +207,11 @@ function closeOverlay() {
                 >
                   {#if item.start && item.start.hasSame(day, 'day')}
                     {item.title}
+                  {:else}
+                    <!-- 継続日は空白またはタイトルなし -->
                   {/if}
                 </div>
-              {:else if !isMultiDayItem(item)}
+              {:else}
                 <div 
                   class="month-item single-day-item"
                   onclick={(e) => { e.stopPropagation(); onItemClick?.(item); }}
