@@ -3,18 +3,12 @@
  * 
  * 特徴:
  * - 完了概念を持たない
- * - start/endは必須（時間占有が前提）
+ * - Timed（時刻指定）と AllDay（終日）の両方をサポート
+ * - CalendarItemの排他的Union型により、start/end または dateRange のいずれかを持つ
  */
 
 import type { CalendarItem } from './CalendarItem';
-import type { DateTime } from 'luxon';
 
-export interface Appointment extends CalendarItem {
+export type Appointment = CalendarItem & {
   type: 'appointment';
-  
-  /** 開始日時（必須） */
-  start: DateTime;
-  
-  /** 終了日時（必須） */
-  end: DateTime;
-}
+};

@@ -6,6 +6,7 @@
 import { DateTime } from 'luxon';
 import { CalendarView } from '../src/lib/components';
 import type { CalendarItem, Task, Appointment } from '../src/lib/models';
+import { toCalendarDate, createCalendarDateRange } from '../src/lib/models';
 
 // サンプルデータ
 let items = $state<CalendarItem[]>([
@@ -229,6 +230,41 @@ let items = $state<CalendarItem[]>([
       textDecoration: 'underline',
     },
   } as Task,
+  
+  // AllDay イベントのテスト
+  {
+    id: '23',
+    type: 'task',
+    title: '終日タスク: プロジェクト計画',
+    dateRange: createCalendarDateRange(
+      toCalendarDate(DateTime.now()),
+      toCalendarDate(DateTime.now().plus({ days: 1 }))
+    ),
+    status: 'doing',
+  } as Task,
+  {
+    id: '24',
+    type: 'appointment',
+    title: '終日予定: 全社会議',
+    dateRange: createCalendarDateRange(
+      toCalendarDate(DateTime.now().plus({ days: 1 })),
+      toCalendarDate(DateTime.now().plus({ days: 2 }))
+    ),
+  } as Appointment,
+  {
+    id: '25',
+    type: 'task',
+    title: '3日間の終日タスク: 研修',
+    dateRange: createCalendarDateRange(
+      toCalendarDate(DateTime.now().plus({ days: 2 })),
+      toCalendarDate(DateTime.now().plus({ days: 5 }))
+    ),
+    status: 'todo',
+    style: {
+      backgroundColor: '#4caf50',
+      color: '#fff',
+    },
+  } as Task,
 ]);
 
 let currentDate = $state(DateTime.now());
@@ -248,12 +284,12 @@ let parentDisplayIndex = $state(-1);
 
 // イベントハンドラ
 function handleItemClick(item: CalendarItem) {
-  console.log('Item clicked:', item);
-  alert(`クリック: ${item.title}\nタイプ: ${item.type}`);
+  console.debug('Item clicked:', item);
+  console.debug(`クリック: ${item.title}\nタイプ: ${item.type}`);
 }
 
 function handleItemMove(item: CalendarItem, newStart: DateTime, newEnd: DateTime) {
-  console.log('Item moved:', item, newStart, newEnd);
+  console.debug('Item moved:', item, newStart, newEnd);
   items = items.map(i =>
     i.id === item.id
       ? { ...i, start: newStart, end: newEnd }
@@ -262,7 +298,7 @@ function handleItemMove(item: CalendarItem, newStart: DateTime, newEnd: DateTime
 }
 
 function handleItemResize(item: CalendarItem, newStart: DateTime, newEnd: DateTime) {
-  console.log('Item resized:', item, newStart, newEnd);
+  console.debug('Item resized:', item, newStart, newEnd);
   items = items.map(i =>
     i.id === item.id
       ? { ...i, start: newStart, end: newEnd }
@@ -271,7 +307,7 @@ function handleItemResize(item: CalendarItem, newStart: DateTime, newEnd: DateTi
 }
 
 function handleViewChange(newDate: DateTime) {
-  console.log('View changed:', newDate);
+  console.debug('View changed:', newDate);
   currentDate = newDate;
 }
 
@@ -287,7 +323,7 @@ function handleSettingsChange(settings: {
   showParent: boolean;
   parentDisplayIndex: number;
 }) {
-  console.log('Settings changed:', settings);
+  console.debug('Settings changed:', settings);
   minorTick = settings.minorTick;
   startHour = settings.startHour;
   endHour = settings.endHour;
@@ -301,9 +337,9 @@ function handleSettingsChange(settings: {
 }
 
 function handleCellClick(dateTime: DateTime, clickPosition: { x: number; y: number }) {
-  console.log('Cell clicked!');
-  console.log('DateTime:', dateTime.toISO());
-  console.log('Click Position:', clickPosition);
+  console.debug('Cell clicked!');
+  console.debug('DateTime:', dateTime.toISO());
+  console.debug('Click Position:', clickPosition);
 }
 </script>
 

@@ -48,13 +48,13 @@ let {
 let localMinorTick = $state(minorTick);
 let localStartHour = $state(startHour);
 let localEndHour = $state(endHour);
-let localShowWeekend = $state(showWeekend);
-let localShowAllDay = $state(showAllDay);
-let localDefaultColorOpacity = $state(defaultColorOpacity);
-let localWeekStartsOn = $state(weekStartsOn);
-let localItemRightMargin = $state(itemRightMargin);
-let localShowParent = $state(showParent);
-let localParentDisplayIndex = $state(parentDisplayIndex);
+let localShowWeekend = $state(showWeekend ?? true);
+let localShowAllDay = $state(showAllDay ?? true);
+let localDefaultColorOpacity = $state(defaultColorOpacity ?? 0.5);
+let localWeekStartsOn = $state(weekStartsOn ?? 1);
+let localItemRightMargin = $state(itemRightMargin ?? 10);
+let localShowParent = $state(showParent ?? true);
+let localParentDisplayIndex = $state(parentDisplayIndex ?? -1);
 
 // 前回の有効な値を保持
 let lastValidMinorTick = $state(minorTick);

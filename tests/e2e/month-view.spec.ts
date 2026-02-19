@@ -645,24 +645,24 @@ test.describe('MonthView - 複数日にまたがるアイテム', () => {
     }
   });
 
-  test('複数日アイテムが週エリアに配置されていること', async ({ page }) => {
-    console.log('[TEST] 複数日アイテムが週エリアに配置されていることを確認');
-    console.log('[REASON] 複数日アイテムは.multi-day-area内に表示される');
+  test('複数日アイテムがスペーサー内に配置されていること', async ({ page }) => {
+    console.log('[TEST] 複数日アイテムがスペーサー内に配置されていることを確認');
+    console.log('[REASON] 複数日アイテムは各セルのスペーサー内で表示領域を確保する');
 
-    const multiDayAreas = page.locator('.multi-day-area');
-    const areaCount = await multiDayAreas.count();
+    const multiDaySpacers = page.locator('.multi-day-spacer');
+    const spacerCount = await multiDaySpacers.count();
     
-    console.log(`[INFO] ${areaCount} multi-day areas found (one per week)`);
-    expect(areaCount).toBeGreaterThan(0);
+    console.log(`[INFO] ${spacerCount} multi-day spacers found`);
+    expect(spacerCount).toBeGreaterThan(0);
 
-    // 最初の週エリアに複数日バーがあるか確認
-    const firstArea = multiDayAreas.first();
-    const barsInFirstArea = firstArea.locator('.multi-day-bar');
-    const barCount = await barsInFirstArea.count();
+    // 複数日バーが存在するか確認
+    const multiDayBars = page.locator('.multi-day-bar');
+    const barCount = await multiDayBars.count();
     
-    console.log(`[INFO] ${barCount} bars in first multi-day area`);
+    console.log(`[INFO] ${barCount} multi-day bars found`);
+    expect(barCount).toBeGreaterThan(0);
     
-    console.log('[PASS] Multi-day items are in week areas');
+    console.log('[PASS] Multi-day items are positioned in spacers');
   });
 });
 

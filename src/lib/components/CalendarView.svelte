@@ -117,6 +117,8 @@ function handleDayClick(date: DateTime) {
       {items}
       {currentDate}
       {onItemClick}
+      {onItemMove}
+      {onItemResize}
       {onViewChange}
       {onCellClick}
       onDayClick={handleDayClick}

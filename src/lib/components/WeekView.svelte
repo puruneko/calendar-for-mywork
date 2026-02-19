@@ -8,7 +8,7 @@
 
 import { DateTime } from 'luxon';
 import type { CalendarItem } from '../models';
-import { getWeekDays, formatTime, formatWeekday, generateTimeSlots, snapToMinorTick } from '../utils';
+import { getWeekDays, formatTime, formatWeekday, generateTimeSlots, snapToMinorTick, getItemStart, getItemEnd, itemContainsDay, isTimed } from '../utils';
 import SettingsModal from './SettingsModal.svelte';
 
 // Z-index層管理は CSS変数で集中管理（demo/App.svelte の :global(:root) に定義）
@@ -159,9 +159,9 @@ let currentTimeLine = $derived.by(() => {
 // 各日のアイテムをフィルタリング
 function getItemsForDay(day: DateTime): CalendarItem[] {
   return items.filter(item => {
-    if (!item.start) return false;
-    return item.start.hasSame(day, 'day') || 
-           (item.end && item.start < day.endOf('day') && item.end > day.startOf('day'));
+    // AllDayアイテムは除外（別レーンで表示）
+    if (!isTimed(item)) return false;
+    return itemContainsDay(item, day);
   });
 }
 
@@ -171,8 +171,10 @@ function getItemsWithLayout(day: DateTime): Array<CalendarItem & { left: number;
   
   // 時間順にソート
   const sorted = [...dayItems].sort((a, b) => {
-    if (!a.start || !b.start) return 0;
-    return a.start.toMillis() - b.start.toMillis();
+    const startA = getItemStart(a);
+    const startB = getItemStart(b);
+    if (!startA || !startB) return 0;
+    return startA.toMillis() - startB.toMillis();
   });
   
   // 重なりグループを検出
@@ -180,14 +182,17 @@ function getItemsWithLayout(day: DateTime): Array<CalendarItem & { left: number;
   let currentGroup: CalendarItem[] = [];
   
   sorted.forEach((item, index) => {
-    if (!item.start || !item.end) return;
+    const itemStart = getItemStart(item);
+    const itemEnd = getItemEnd(item);
+    if (!itemStart || !itemEnd) return;
     
     if (currentGroup.length === 0) {
       currentGroup.push(item);
     } else {
       // 現在のグループの最後のアイテムと重なるかチェック
       const lastItem = currentGroup[currentGroup.length - 1];
-      if (lastItem.end && item.start < lastItem.end) {
+      const lastEnd = getItemEnd(lastItem);
+      if (lastEnd && itemStart < lastEnd) {
         currentGroup.push(item);
       } else {
         // 新しいグループ開始
@@ -214,7 +219,9 @@ function getItemsWithLayout(day: DateTime): Array<CalendarItem & { left: number;
       for (let col = 0; col < columns.length; col++) {
         const columnItems = columns[col];
         const canPlace = columnItems.every(existing => {
-          return !existing.end || !item.start || existing.end <= item.start;
+          const existingEnd = getItemEnd(existing);
+          const itemStart = getItemStart(item);
+          return !existingEnd || !itemStart || existingEnd <= itemStart;
         });
         
         if (canPlace) {
@@ -277,32 +284,39 @@ function handleResizeStart(event: MouseEvent, item: CalendarItem, edge: 'top' | 
 
 // リサイズ中
 function handleResizeMove(event: MouseEvent) {
-  if (!resizingItem || !resizeEdge || !resizingItem.start || !resizingItem.end) return;
+  if (!resizingItem || !resizeEdge) return;
+  
+  const itemStart = getItemStart(resizingItem);
+  const itemEnd = getItemEnd(resizingItem);
+  if (!itemStart || !itemEnd) return;
+  
+  // AllDayアイテムのリサイズは未対応
+  if (!isTimed(resizingItem)) return;
   
   const deltaY = event.clientY - resizeStartY;
   const hourHeight = 60;
   const deltaMinutes = (deltaY / hourHeight) * 60;
   
-  let newStart = resizingItem.start;
-  let newEnd = resizingItem.end;
+  let newStart = itemStart;
+  let newEnd = itemEnd;
   
   if (resizeEdge === 'top') {
     // 上端をドラッグ → 開始時刻を変更（日付をまたぐことも可能）
-    const rawStart = resizingItem.start.plus({ minutes: deltaMinutes });
+    const rawStart = itemStart.plus({ minutes: deltaMinutes });
     newStart = snapToMinorTick(rawStart, minorTick);
     
     // 開始時刻が終了時刻を超えないようにする
-    if (newStart >= resizingItem.end) {
-      newStart = resizingItem.end.minus({ minutes: minorTick });
+    if (newStart >= itemEnd) {
+      newStart = itemEnd.minus({ minutes: minorTick });
     }
   } else {
     // 下端をドラッグ → 終了時刻を変更（日付をまたぐことも可能）
-    const rawEnd = resizingItem.end.plus({ minutes: deltaMinutes });
+    const rawEnd = itemEnd.plus({ minutes: deltaMinutes });
     newEnd = snapToMinorTick(rawEnd, minorTick);
     
     // 終了時刻が開始時刻を下回らないようにする
-    if (newEnd <= resizingItem.start) {
-      newEnd = resizingItem.start.plus({ minutes: minorTick });
+    if (newEnd <= itemStart) {
+      newEnd = itemStart.plus({ minutes: minorTick });
     }
   }
   
@@ -344,7 +358,13 @@ let resizeStartY = $state<number>(0);
 // ドラッグプレビュー（移動先の影）のスタイルを計算
 let dragPreviewStyle = $derived.by(() => {
   if (!draggedItem || !currentDragOverDay || currentDragOverY === null) return null;
-  if (!draggedItem.start || !draggedItem.end) return null;
+  
+  const itemStart = getItemStart(draggedItem);
+  const itemEnd = getItemEnd(draggedItem);
+  if (!itemStart || !itemEnd) return null;
+  
+  // AllDayアイテムのドラッグは未対応
+  if (!isTimed(draggedItem)) return null;
   
   // ターゲット日のグリッドを取得
   const dayGrids = document.querySelectorAll('.day-grid');
@@ -378,7 +398,7 @@ let dragPreviewStyle = $derived.by(() => {
   const top = newStart.diff(dayStart, 'minutes').minutes;
   
   // アイテムの期間を維持
-  const duration = draggedItem.end.diff(draggedItem.start, 'minutes').minutes;
+  const duration = itemEnd.diff(itemStart, 'minutes').minutes;
   const height = duration;
   
   return {
@@ -547,11 +567,13 @@ function applyDefaultOpacity(color: string | undefined, opacity: number): string
 
 // アイテムの位置とサイズを計算（横幅調整あり + カスタムスタイル適用）
 function getItemStyle(item: CalendarItem & { left?: number; width?: number }): string {
-  if (!item.start || !item.end) return '';
+  const itemStart = getItemStart(item);
+  const itemEnd = getItemEnd(item);
+  if (!itemStart || !itemEnd) return '';
   
-  const dayStart = item.start.startOf('day').set({ hour: startHour });
-  const minutesFromStart = item.start.diff(dayStart, 'minutes').minutes;
-  const duration = item.end.diff(item.start, 'minutes').minutes;
+  const dayStart = itemStart.startOf('day').set({ hour: startHour });
+  const minutesFromStart = itemStart.diff(dayStart, 'minutes').minutes;
+  const duration = itemEnd.diff(itemStart, 'minutes').minutes;
   
   const hourHeight = 60; // 1時間あたりのピクセル高さ
   const top = (minutesFromStart / 60) * hourHeight;
@@ -572,8 +594,8 @@ function getItemStyle(item: CalendarItem & { left?: number; width?: number }): s
     
     // デバッグ: styleプロパティの内容を確認
     if (item.title.includes('カスタムスタイル')) {
-      console.log(`[DEBUG] ${item.title} - style:`, item.style);
-      console.log(`[DEBUG] Object.entries:`, Object.entries(item.style));
+      console.debug(`[DEBUG] ${item.title} - style:`, item.style);
+      console.debug(`[DEBUG] Object.entries:`, Object.entries(item.style));
     }
     
     for (const [key, value] of Object.entries(item.style)) {
@@ -594,7 +616,7 @@ function getItemStyle(item: CalendarItem & { left?: number; width?: number }): s
     }
     
     if (item.title.includes('カスタムスタイル')) {
-      console.log(`[DEBUG] ${item.title} - customStyles:`, customStyles);
+      console.debug(`[DEBUG] ${item.title} - customStyles:`, customStyles);
     }
     
     if (customStyles.length > 0) {
@@ -608,7 +630,8 @@ function getItemStyle(item: CalendarItem & { left?: number; width?: number }): s
 // アイテムのCSSクラスを取得
 function getItemClass(item: CalendarItem): string {
   if (item.type === 'task') {
-    return `calendar-item task task-${item.status}`;
+    const task = item as any; // Type assertion needed since status only exists on Task
+    return `calendar-item task task-${task.status}`;
   }
   return 'calendar-item appointment';
 }

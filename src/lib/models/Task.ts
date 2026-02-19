@@ -3,7 +3,7 @@
  * 
  * 特徴:
  * - 完了・進捗の概念を持つ
- * - 時間を占有しないTaskも許容
+ * - Timed（時刻指定）と AllDay（終日）の両方をサポート
  * - 階層構造をサポート（parentId）
  */
 
@@ -11,7 +11,7 @@ import type { CalendarItem } from './CalendarItem';
 
 export type TaskStatus = 'todo' | 'doing' | 'done' | 'undefined';
 
-export interface Task extends CalendarItem {
+export type Task = CalendarItem & {
   type: 'task';
   
   /** タスクの状態 */
@@ -19,4 +19,4 @@ export interface Task extends CalendarItem {
   
   /** 親タスクID（階層構造用） */
   parentId?: string;
-}
+};

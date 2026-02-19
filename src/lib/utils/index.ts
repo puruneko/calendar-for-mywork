@@ -4,3 +4,4 @@
 
 export * from './dateUtils';
 export * from './dndUtils';
+export * from './itemUtils';

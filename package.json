@@ -8,12 +8,12 @@
     "scripts": {
         "dev": "vite",
         "build": "vite build && tsc --emitDeclarationOnly",
-        "test": "vitest run",
         "test:watch": "vitest",
         "check": "svelte-check --tsconfig ./tsconfig.json",
         "demo": "vite --open --port 5177",
         "example:demo": "vite --open",
         "allowedCommit": "git commit -m ",
+        "test:function": "vitest run",
         "test:e2e": "npx playwright test",
         "test:e2e:preview": "vite preview"
     },
