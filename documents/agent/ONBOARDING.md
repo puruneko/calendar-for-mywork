@@ -14,16 +14,31 @@
 ### ✅ 完了済み
 - プロジェクト初期設定（package.json, tsconfig.json, vite.config.ts等）
 - 依存関係のインストール（Svelte, Vite, Vitest, Playwright, Luxon等）
+- データモデル（Task/Appointment/CalendarItem）の実装
+- WeekView（週表示）コンポーネント - 完全実装
+- MonthView（月表示）コンポーネント - 完全実装
+- CalendarView（統合ビュー）コンポーネント - 週/月切り替え対応
+- SettingsModal（設定モーダル）コンポーネント
+- DnD機能（ドラッグ&ドロップ）- 完全実装
+- リサイズ機能（上端/下端のハンドル対応）
+- 時間軸の刻み機能（majorTick/minorTick）
+- 現在時刻線の表示
+- カスタムスタイル機能（アイテム単位のスタイル指定）
+- 親子関係の表示機能（parentId対応）
+- 設定可能な右余白（itemRightMargin）
+- レスポンシブデザイン
+- アクセシビリティ対応
+- 単体テスト: 33件（dateUtils, dndUtils）
+- E2Eテスト: 7ファイル（calendar, custom-style, dnd, month-view, resize-and-settings, resize, tick-and-timeline）
 
 ### 🚧 進行中
-- 基本的なプロジェクト構造の作成
+- MonthView の複数日アイテム表示改善（オーバーレイ機能）
 
 ### 📋 未着手
-- データモデル（Task/Appointment）の実装
-- 1週間表示の基本カレンダーUIコンポーネント
-- DnD機能
-- ズーム機能
-- テストコード
+- 日表示モード
+- 年表示モード
+- 仮想スクロール（大量データ対応）
+- ライブラリのnpmパッケージ公開
 
 ## 技術スタック
 
@@ -72,4 +87,4 @@ gitのcommitログより確認
 
 ## 最終更新
 
-2026-02-17: プロジェクト初期セットアップ完了
+2026-02-19: WeekView/MonthView完全実装、DnD/リサイズ機能完成、テスト充実

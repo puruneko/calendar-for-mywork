@@ -21,6 +21,13 @@ let {
   onDayClick,
 }: Props = $props();
 
+// オーバーレイ状態
+let overlayDay: DateTime | null = $state(null);
+let overlayItems: CalendarItem[] = $state([]);
+
+// 1日あたりの最大表示アイテム数
+const MAX_ITEMS_PER_DAY = 3;
+
 // 月の全ての日付を取得（前月・翌月の日も含む）
 function getMonthDays(date: DateTime): DateTime[] {
   const startOfMonth = date.startOf('month');
@@ -67,6 +74,27 @@ function getItemsForDay(day: DateTime): CalendarItem[] {
   });
 }
 
+// 複数日にまたがるアイテムがその日に含まれるか判定
+function isItemInDay(item: CalendarItem, day: DateTime): boolean {
+  if (!item.start || !item.end) return false;
+  const dayStart = day.startOf('day');
+  const dayEnd = day.endOf('day');
+  return item.start <= dayEnd && item.end >= dayStart;
+}
+
+// 複数日アイテムの表示スタイル（継続を示すために角を調整）
+function getMultiDayItemClass(item: CalendarItem, day: DateTime): string {
+  if (!item.start || !item.end) return '';
+  
+  const isStart = item.start.hasSame(day, 'day');
+  const isEnd = item.end.hasSame(day, 'day');
+  
+  if (isStart && isEnd) return '';
+  if (isStart) return 'multi-day-start';
+  if (isEnd) return 'multi-day-end';
+  return 'multi-day-continue';
+}
+
 // アイテムの背景色を取得
 function getItemBgColor(item: CalendarItem): string {
   if (item.style?.backgroundColor) {
@@ -105,6 +133,19 @@ function handleCellClick(event: MouseEvent, day: DateTime) {
 function handleDayNumberClick(event: MouseEvent, day: DateTime) {
   event.stopPropagation();
   onDayClick?.(day);
+}
+
+// +N more クリック
+function handleMoreClick(event: MouseEvent, day: DateTime, items: CalendarItem[]) {
+  event.stopPropagation();
+  overlayDay = day;
+  overlayItems = items;
+}
+
+// オーバーレイを閉じる
+function closeOverlay() {
+  overlayDay = null;
+  overlayItems = [];
 }
 </script>
 
@@ -147,18 +188,22 @@ function handleDayNumberClick(event: MouseEvent, day: DateTime) {
           </div>
           
           <div class="day-items">
-            {#each dayItems as item (item.id)}
-              {#if isMultiDayItem(item)}
-                {#if item.start && item.start.hasSame(day, 'day')}
-                  <div 
-                    class="month-item multi-day-item"
-                    style="background-color: {getItemBgColor(item)};"
-                    onclick={(e) => { e.stopPropagation(); onItemClick?.(item); }}
-                  >
+            {@const visibleItems = dayItems.slice(0, MAX_ITEMS_PER_DAY)}
+            {@const hiddenCount = dayItems.length - MAX_ITEMS_PER_DAY}
+            
+            {#each visibleItems as item (item.id)}
+              {#if isMultiDayItem(item) && isItemInDay(item, day)}
+                {@const multiDayClass = getMultiDayItemClass(item, day)}
+                <div 
+                  class="month-item multi-day-item {multiDayClass}"
+                  style="background-color: {getItemBgColor(item)};"
+                  onclick={(e) => { e.stopPropagation(); onItemClick?.(item); }}
+                >
+                  {#if item.start && item.start.hasSame(day, 'day')}
                     {item.title}
-                  </div>
-                {/if}
-              {:else}
+                  {/if}
+                </div>
+              {:else if !isMultiDayItem(item)}
                 <div 
                   class="month-item single-day-item"
                   onclick={(e) => { e.stopPropagation(); onItemClick?.(item); }}
@@ -169,11 +214,50 @@ function handleDayNumberClick(event: MouseEvent, day: DateTime) {
                 </div>
               {/if}
             {/each}
+            
+            {#if hiddenCount > 0}
+              <div 
+                class="more-items"
+                onclick={(e) => handleMoreClick(e, day, dayItems)}
+              >
+                +{hiddenCount} more
+              </div>
+            {/if}
           </div>
         </div>
       {/each}
     {/each}
   </div>
+  
+  <!-- オーバーレイ -->
+  {#if overlayDay}
+    <div class="overlay-backdrop" onclick={closeOverlay}>
+      <div class="overlay-content" onclick={(e) => e.stopPropagation()}>
+        <div class="overlay-header">
+          <h3>{overlayDay.toFormat('M月d日')}のすべてのアイテム</h3>
+          <button class="overlay-close" onclick={closeOverlay}>×</button>
+        </div>
+        <div class="overlay-items">
+          {#each overlayItems as item (item.id)}
+            <div 
+              class="overlay-item"
+              onclick={() => { onItemClick?.(item); closeOverlay(); }}
+            >
+              <div class="overlay-item-dot" style="background-color: {getItemBgColor(item)};"></div>
+              <div class="overlay-item-content">
+                <div class="overlay-item-title">{item.title}</div>
+                {#if item.start && item.end}
+                  <div class="overlay-item-time">
+                    {formatTime(item.start)} - {formatTime(item.end)}
+                  </div>
+                {/if}
+              </div>
+            </div>
+          {/each}
+        </div>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -298,6 +382,21 @@ function handleDayNumberClick(event: MouseEvent, day: DateTime) {
     color: #333;
     font-weight: 500;
     box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    min-height: 20px;
+  }
+
+  .multi-day-start {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+
+  .multi-day-continue {
+    border-radius: 0;
+  }
+
+  .multi-day-end {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
   }
 
   .single-day-item {
@@ -328,5 +427,120 @@ function handleDayNumberClick(event: MouseEvent, day: DateTime) {
     text-overflow: ellipsis;
     white-space: nowrap;
     color: #333;
+  }
+
+  .more-items {
+    padding: 2px 4px;
+    font-size: 11px;
+    color: #2196f3;
+    cursor: pointer;
+    font-weight: 500;
+  }
+
+  .more-items:hover {
+    text-decoration: underline;
+  }
+
+  /* オーバーレイ */
+  .overlay-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+
+  .overlay-content {
+    background: white;
+    border-radius: 8px;
+    padding: 0;
+    max-width: 500px;
+    width: 90%;
+    max-height: 80vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  .overlay-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid #e0e0e0;
+  }
+
+  .overlay-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+  }
+
+  .overlay-close {
+    background: none;
+    border: none;
+    font-size: 28px;
+    cursor: pointer;
+    color: #666;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+  }
+
+  .overlay-close:hover {
+    background-color: #f5f5f5;
+  }
+
+  .overlay-items {
+    overflow-y: auto;
+    padding: 12px 20px;
+  }
+
+  .overlay-item {
+    display: flex;
+    gap: 12px;
+    padding: 12px;
+    margin-bottom: 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+
+  .overlay-item:hover {
+    background-color: #f5f5f5;
+  }
+
+  .overlay-item-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-top: 4px;
+    flex-shrink: 0;
+  }
+
+  .overlay-item-content {
+    flex: 1;
+  }
+
+  .overlay-item-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: #333;
+    margin-bottom: 4px;
+  }
+
+  .overlay-item-time {
+    font-size: 12px;
+    color: #666;
   }
 </style>

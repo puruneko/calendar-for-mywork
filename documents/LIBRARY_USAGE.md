@@ -47,7 +47,49 @@ const appointments: Appointment[] = [
 const items = [...tasks, ...appointments];
 ```
 
-### 2. カレンダーの表示
+### 2. CalendarView（週/月統合ビュー）の使用
+
+```svelte
+<script lang="ts">
+  import { CalendarView } from 'svelte-calendar-lib';
+  import { DateTime } from 'luxon';
+  import type { CalendarItem } from 'svelte-calendar-lib';
+
+  let items = $state<CalendarItem[]>([...]);
+  let currentDate = $state(DateTime.now());
+  let viewType = $state<'week' | 'month'>('week');
+
+  function handleItemMove(item: CalendarItem, newStart: DateTime, newEnd: DateTime) {
+    // データを更新
+    items = items.map(i => 
+      i.id === item.id 
+        ? { ...i, start: newStart, end: newEnd }
+        : i
+    );
+  }
+
+  function handleItemClick(item: CalendarItem) {
+    console.log('Clicked:', item);
+  }
+
+  function handleDayClick(date: DateTime) {
+    // 月表示で日をクリックすると、その日の週表示に切り替わる
+    currentDate = date;
+    viewType = 'week';
+  }
+</script>
+
+<CalendarView 
+  {items}
+  {currentDate}
+  bind:viewType
+  onItemMove={handleItemMove}
+  onItemClick={handleItemClick}
+  onDayClick={handleDayClick}
+/>
+```
+
+### 3. WeekView（週表示のみ）の使用
 
 ```svelte
 <script lang="ts">
@@ -59,7 +101,14 @@ const items = [...tasks, ...appointments];
   let currentDate = $state(DateTime.now());
 
   function handleItemMove(item: CalendarItem, newStart: DateTime, newEnd: DateTime) {
-    // データを更新
+    items = items.map(i => 
+      i.id === item.id 
+        ? { ...i, start: newStart, end: newEnd }
+        : i
+    );
+  }
+
+  function handleItemResize(item: CalendarItem, newStart: DateTime, newEnd: DateTime) {
     items = items.map(i => 
       i.id === item.id 
         ? { ...i, start: newStart, end: newEnd }
@@ -75,12 +124,63 @@ const items = [...tasks, ...appointments];
 <WeekView 
   {items}
   {currentDate}
+  startHour={8}
+  endHour={20}
+  minorTick={15}
   onItemMove={handleItemMove}
+  onItemResize={handleItemResize}
   onItemClick={handleItemClick}
 />
 ```
 
+### 4. MonthView（月表示のみ）の使用
+
+```svelte
+<script lang="ts">
+  import { MonthView } from 'svelte-calendar-lib';
+  import { DateTime } from 'luxon';
+  import type { CalendarItem } from 'svelte-calendar-lib';
+
+  let items = $state<CalendarItem[]>([...]);
+  let currentDate = $state(DateTime.now());
+
+  function handleItemClick(item: CalendarItem) {
+    console.log('Clicked:', item);
+  }
+
+  function handleDayClick(date: DateTime) {
+    console.log('Day clicked:', date);
+    // 例: 週表示に切り替える
+  }
+</script>
+
+<MonthView 
+  {items}
+  {currentDate}
+  onItemClick={handleItemClick}
+  onDayClick={handleDayClick}
+/>
+```
+
 ## API リファレンス
+
+### CalendarView Props
+
+| プロパティ | 型 | 必須 | デフォルト | 説明 |
+|-----------|------|------|-----------|------|
+| `items` | `CalendarItem[]` | ✔ | - | 表示するアイテムリスト |
+| `currentDate` | `DateTime` | ✔ | - | 表示基準日 |
+| `viewType` | `'week' \| 'month'` | - | `'week'` | 表示モード |
+| `startHour` | `number` | - | `8` | 表示開始時刻（0-23） |
+| `endHour` | `number` | - | `20` | 表示終了時刻（1-24） |
+| `minorTick` | `number` | - | `15` | マイナーグリッド線の間隔、DnD移動単位（分） |
+| `showWeekend` | `boolean` | - | `true` | 週末を表示するか |
+| `showAllDay` | `boolean` | - | `true` | 全日イベントを表示するか |
+| `defaultColorOpacity` | `number` | - | `0.5` | デフォルト色の透明度（0.0-1.0） |
+| `weekStartsOn` | `number` | - | `1` | 週開始曜日（1=月曜） |
+| `itemRightMargin` | `number` | - | `10` | アイテム右余白（px） |
+| `showParent` | `boolean` | - | `true` | 親タスクを表示するか |
+| `parentDisplayIndex` | `number` | - | `-1` | 親タスク表示インデックス |
 
 ### WeekView Props
 
@@ -88,18 +188,37 @@ const items = [...tasks, ...appointments];
 |-----------|------|------|-----------|------|
 | `items` | `CalendarItem[]` | ✔ | - | 表示するアイテムリスト |
 | `currentDate` | `DateTime` | ✔ | - | 表示基準日（週の決定に使用） |
-| `startHour` | `number` | - | `0` | 表示開始時刻（0-23） |
-| `endHour` | `number` | - | `24` | 表示終了時刻（1-24） |
-| `tickInterval` | `number` | - | `60` | 時間軸の刻み（分単位） |
+| `startHour` | `number` | - | `8` | 表示開始時刻（0-23） |
+| `endHour` | `number` | - | `20` | 表示終了時刻（1-24） |
+| `majorTick` | `number` | - | `60` | メジャーグリッド線の間隔（分） |
+| `minorTick` | `number` | - | `15` | マイナーグリッド線の間隔、DnD移動単位（分） |
+| `showWeekend` | `boolean` | - | `true` | 週末を表示するか |
+| `showAllDay` | `boolean` | - | `true` | 全日イベントを表示するか |
+| `defaultColorOpacity` | `number` | - | `0.5` | デフォルト色の透明度（0.0-1.0） |
+| `weekStartsOn` | `number` | - | `1` | 週開始曜日（1=月曜） |
+| `itemRightMargin` | `number` | - | `10` | アイテム右余白（px） |
+| `showParent` | `boolean` | - | `true` | 親タスクを表示するか |
+| `parentDisplayIndex` | `number` | - | `-1` | 親タスク表示インデックス |
 
-### WeekView Events
+### MonthView Props
+
+| プロパティ | 型 | 必須 | デフォルト | 説明 |
+|-----------|------|------|-----------|------|
+| `items` | `CalendarItem[]` | ✔ | - | 表示するアイテムリスト |
+| `currentDate` | `DateTime` | ✔ | - | 表示基準日 |
+
+### Events（共通）
 
 | イベント | 型 | 説明 |
 |---------|------|------|
 | `onItemClick` | `(item: CalendarItem) => void` | アイテムがクリックされた時 |
-| `onItemMove` | `(item: CalendarItem, newStart: DateTime, newEnd: DateTime) => void` | アイテムがドラッグ移動された時 |
-| `onItemResize` | `(item: CalendarItem, newStart: DateTime, newEnd: DateTime) => void` | アイテムがリサイズされた時 |
-| `onViewChange` | `(newDate: DateTime) => void` | 週の表示が変更された時 |
+| `onItemMove` | `(item: CalendarItem, newStart: DateTime, newEnd: DateTime) => void` | アイテムがドラッグ移動された時（WeekView） |
+| `onItemResize` | `(item: CalendarItem, newStart: DateTime, newEnd: DateTime) => void` | アイテムがリサイズされた時（WeekView） |
+| `onViewChange` | `(newDate: DateTime) => void` | 週/月の表示が変更された時 |
+| `onCellClick` | `(dateTime: DateTime, clickPosition: { x: number; y: number }) => void` | セルがクリックされた時 |
+| `onDayClick` | `(date: DateTime) => void` | 日がクリックされた時（MonthView） |
+| `onSettingsChange` | `(settings: any) => void` | 設定が変更された時（WeekView） |
+| `onViewTypeChange` | `(viewType: 'week' \| 'month') => void` | 表示モードが変更された時（CalendarView） |
 
 ## データモデル
 
@@ -152,6 +271,26 @@ interface Appointment extends CalendarItem {
 }
 ```
 
+### アイテム単位のカスタムスタイル
+
+```typescript
+const items: CalendarItem[] = [
+  {
+    id: '1',
+    type: 'task',
+    title: 'VIP会議',
+    start: DateTime.now().set({ hour: 14 }),
+    end: DateTime.now().set({ hour: 15 }),
+    status: 'todo',
+    customStyle: {
+      backgroundColor: '#ff5252',  // 赤色の背景
+      color: '#ffffff',            // 白色のテキスト
+      opacity: 0.9,
+    }
+  }
+];
+```
+
 ### スタイルのオーバーライド
 
 ```svelte
@@ -162,6 +301,32 @@ interface Appointment extends CalendarItem {
   }
 </style>
 ```
+
+### 親子関係の表示
+
+```typescript
+const items: CalendarItem[] = [
+  {
+    id: 'parent-1',
+    type: 'task',
+    title: '親タスク',
+    start: DateTime.now().set({ hour: 9 }),
+    end: DateTime.now().set({ hour: 17 }),
+    status: 'doing',
+  },
+  {
+    id: 'child-1',
+    type: 'task',
+    title: '子タスク',
+    start: DateTime.now().set({ hour: 10 }),
+    end: DateTime.now().set({ hour: 12 }),
+    status: 'doing',
+    parentId: 'parent-1',  // 親タスクを参照
+  }
+];
+```
+
+`showParent={true}` にすると、子タスクの表示時に親タスクも表示されます。
 
 ## 使用例
 

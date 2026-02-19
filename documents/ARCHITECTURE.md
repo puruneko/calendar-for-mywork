@@ -15,16 +15,29 @@
 │   Calendar UI Library (Svelte)      │
 │                                     │
 │  ┌──────────────────────────────┐  │
-│  │  WeekView Component          │  │
-│  │  - Rendering Engine          │  │
-│  │  - Event Dispatcher          │  │
-│  └──────────────────────────────┘  │
+│  │  CalendarView                │  │
+│  │  - Week/Month Switcher       │  │
+│  └──────────┬───────────────────┘  │
+│             │                       │
+│    ┌────────┴────────┐             │
+│    ↓                 ↓             │
+│  ┌─────────┐    ┌──────────┐      │
+│  │WeekView │    │MonthView │      │
+│  │+ DnD    │    │+ Events  │      │
+│  │+ Resize │    │          │      │
+│  └─────────┘    └──────────┘      │
 │                                     │
 │  ┌──────────────────────────────┐  │
 │  │  Data Models                 │  │
 │  │  - CalendarItem (interface)  │  │
 │  │  - Task                      │  │
 │  │  - Appointment               │  │
+│  └──────────────────────────────┘  │
+│                                     │
+│  ┌──────────────────────────────┐  │
+│  │  Utils                       │  │
+│  │  - dateUtils                 │  │
+│  │  - dndUtils                  │  │
 │  └──────────────────────────────┘  │
 └─────────────────────────────────────┘
 ```
@@ -93,21 +106,56 @@ interface Appointment extends CalendarItem {
 
 ## 4. コンポーネント設計
 
-### 4.1 WeekView.svelte
+### 4.1 CalendarView.svelte
 
 **責務**:
-- 1週間分のカレンダーグリッド描画
-- Task/Appointmentの配置とレンダリング
-- ユーザー操作の検知とイベント発火
+- 週表示/月表示の切り替え
+- 共通のナビゲーション機能
+- 設定の統合管理
 
 **Props**:
 ```typescript
 {
-  items: CalendarItem[];      // 表示するアイテム
-  currentDate: DateTime;      // 表示基準日
-  startHour?: number;         // 表示開始時刻（デフォルト: 0）
-  endHour?: number;           // 表示終了時刻（デフォルト: 24）
-  tickInterval?: number;      // 時間軸の刻み（分単位、デフォルト: 60）
+  items: CalendarItem[];
+  currentDate: DateTime;
+  viewType: 'week' | 'month';  // 表示モード
+  // WeekView用
+  startHour?: number;
+  endHour?: number;
+  minorTick?: number;
+  showWeekend?: boolean;
+  showAllDay?: boolean;
+  // その他
+  onViewTypeChange?: (viewType: 'week' | 'month') => void;
+  // ... その他のイベントハンドラ
+}
+```
+
+### 4.2 WeekView.svelte
+
+**責務**:
+- 1週間分のカレンダーグリッド描画
+- Task/Appointmentの配置とレンダリング
+- DnD（ドラッグ&ドロップ）機能
+- リサイズ機能
+- 現在時刻線の表示
+
+**Props**:
+```typescript
+{
+  items: CalendarItem[];           // 表示するアイテム
+  currentDate: DateTime;           // 表示基準日
+  startHour?: number;              // 表示開始時刻（デフォルト: 8）
+  endHour?: number;                // 表示終了時刻（デフォルト: 20）
+  majorTick?: number;              // メジャーグリッド線の間隔（デフォルト: 60分）
+  minorTick?: number;              // マイナーグリッド線の間隔、DnD移動単位（デフォルト: 15分）
+  showWeekend?: boolean;           // 週末表示（デフォルト: true）
+  showAllDay?: boolean;            // 全日イベント表示（デフォルト: true）
+  defaultColorOpacity?: number;    // デフォルト色の透明度（デフォルト: 0.5）
+  weekStartsOn?: number;           // 週開始曜日（1=月曜、デフォルト: 1）
+  itemRightMargin?: number;        // アイテム右余白（デフォルト: 10px）
+  showParent?: boolean;            // 親タスク表示（デフォルト: true）
+  parentDisplayIndex?: number;     // 親タスク表示インデックス（デフォルト: -1）
 }
 ```
 
@@ -118,6 +166,62 @@ interface Appointment extends CalendarItem {
   onItemMove?: (item: CalendarItem, newStart: DateTime, newEnd: DateTime) => void;
   onItemResize?: (item: CalendarItem, newStart: DateTime, newEnd: DateTime) => void;
   onViewChange?: (newDate: DateTime) => void;
+  onCellClick?: (dateTime: DateTime, clickPosition: { x: number; y: number }) => void;
+  onSettingsChange?: (settings: any) => void;
+}
+```
+
+**主要機能**:
+- Z-index層管理（グリッド線、アイテム、リサイズハンドル、現在時刻線など）
+- DnDプレビュー表示
+- リサイズハンドル（上端/下端）
+- カスタムスタイル適用（アイテム単位）
+- 親子関係の表示
+
+### 4.3 MonthView.svelte
+
+**責務**:
+- 月カレンダーグリッドの描画
+- 日単位のアイテム表示
+- 月間ナビゲーション
+
+**Props**:
+```typescript
+{
+  items: CalendarItem[];
+  currentDate: DateTime;
+  onItemClick?: (item: CalendarItem) => void;
+  onViewChange?: (date: DateTime) => void;
+  onCellClick?: (dateTime: DateTime, clickPosition: { x: number; y: number }) => void;
+  onDayClick?: (date: DateTime) => void;  // 日クリックで週表示へ切り替え
+}
+```
+
+**主要機能**:
+- 42日表示（6週間）
+- 複数日にまたがるアイテムの表示
+- オーバーレイ機能（進行中）
+
+### 4.4 SettingsModal.svelte
+
+**責務**:
+- カレンダー設定のUI
+- 設定値のバリデーション
+
+**Props**:
+```typescript
+{
+  show: boolean;
+  settings: {
+    startHour: number;
+    endHour: number;
+    minorTick: number;
+    showWeekend: boolean;
+    showAllDay: boolean;
+    // ... その他の設定
+  };
+  onClose?: () => void;
+  onSave?: (settings: any) => void;
 }
 ```
 
@@ -200,14 +304,52 @@ interface Appointment extends CalendarItem {
 ## 9. テスト戦略
 
 ### 9.1 単体テスト (Vitest)
-- データモデルのバリデーション
-- ユーティリティ関数のロジック
-- コンポーネントの基本的な描画
+**実装済み: 33件**
+
+- **dateUtils (10件)**
+  - 週の日付取得
+  - 時間スロット生成
+  - 時刻フォーマット
+  - スナップ処理
+
+- **dndUtils (23件)**
+  - DnD位置計算
+  - 時間変換
+  - スナップ処理
+  - 重複チェック
 
 ### 9.2 E2Eテスト (Playwright)
-- カレンダー表示の確認
-- アイテムのクリック・移動
-- 週の切り替え
+**実装済み: 7ファイル**
+
+- **calendar.spec.ts**: 基本カレンダー機能
+  - アイテム表示
+  - クリックイベント
+  - ナビゲーション
+
+- **custom-style.spec.ts**: カスタムスタイル機能
+  - アイテム単位のスタイル適用
+  - 色/透明度のカスタマイズ
+
+- **dnd.spec.ts**: ドラッグ&ドロップ
+  - アイテム移動
+  - スナップ処理
+  - イベント発火
+
+- **month-view.spec.ts**: 月表示
+  - 月カレンダー表示
+  - 日クリック → 週表示切り替え
+
+- **resize-and-settings.spec.ts**: リサイズと設定
+  - リサイズハンドル操作
+  - 設定モーダル
+
+- **resize.spec.ts**: リサイズ機能詳細
+  - 上端/下端ハンドル
+  - 時間調整
+
+- **tick-and-timeline.spec.ts**: 時間軸
+  - majorTick/minorTick設定
+  - 現在時刻線表示
 
 ## 10. ビルド成果物
 
