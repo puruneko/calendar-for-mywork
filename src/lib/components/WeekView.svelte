@@ -68,8 +68,8 @@ interface Props {
   /** アイテムの色のデフォルト透明度（0-1） */
   defaultColorOpacity?: number;
   
-  /** アイテム表示領域の左マージン（px） */
-  itemLeftMargin?: number;
+  /** アイテム表示領域の右マージン（px） */
+  itemRightMargin?: number;
   
   /** 週の開始曜日（1=月曜, 7=日曜） */
   weekStartsOn?: number;
@@ -86,6 +86,7 @@ interface Props {
     showAllDay: boolean;
     defaultColorOpacity: number;
     weekStartsOn: number;
+    itemRightMargin: number;
   }) => void;
 }
 
@@ -101,7 +102,7 @@ let {
   showWeekend = true,
   showAllDay = true,
   defaultColorOpacity = 0.5,
-  itemLeftMargin = 5,
+  itemRightMargin = 10,
   weekStartsOn = 1,
   onItemClick,
   onItemMove,
@@ -480,6 +481,7 @@ function handleSettingsChange(settings: {
   showAllDay: boolean;
   defaultColorOpacity: number;
   weekStartsOn: number;
+  itemRightMargin: number;
 }) {
   // 親コンポーネントに設定変更を通知
   onSettingsChange?.(settings);
@@ -636,6 +638,7 @@ function getItemClass(item: CalendarItem): string {
       {showAllDay}
       {defaultColorOpacity}
       {weekStartsOn}
+      {itemRightMargin}
       onClose={toggleSettings}
       onChange={handleSettingsChange}
     />
@@ -653,7 +656,7 @@ function getItemClass(item: CalendarItem): string {
 
     <!-- 各曜日の列 -->
     {#each weekDays as day, dayIndex}
-      <div class="day-column" style="padding-left: {itemLeftMargin}px;">
+      <div class="day-column" style="padding-right: {itemRightMargin}px;">
         <!-- 曜日ヘッダー -->
         <div class="day-header">
           <div class="weekday">{formatWeekday(day)}</div>

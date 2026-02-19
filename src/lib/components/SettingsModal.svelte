@@ -11,6 +11,7 @@ interface Props {
   showAllDay?: boolean;
   defaultColorOpacity?: number;
   weekStartsOn?: number;
+  itemRightMargin?: number;
   onClose: () => void;
   onChange: (settings: {
     minorTick: number;
@@ -20,6 +21,7 @@ interface Props {
     showAllDay: boolean;
     defaultColorOpacity: number;
     weekStartsOn: number;
+    itemRightMargin: number;
   }) => void;
 }
 
@@ -31,6 +33,7 @@ let {
   showAllDay = $bindable(),
   defaultColorOpacity = 0.5,
   weekStartsOn = 1,
+  itemRightMargin = 10,
   onClose,
   onChange,
 }: Props = $props();
@@ -43,6 +46,7 @@ let localShowWeekend = $state(showWeekend);
 let localShowAllDay = $state(showAllDay);
 let localDefaultColorOpacity = $state(defaultColorOpacity);
 let localWeekStartsOn = $state(weekStartsOn);
+let localItemRightMargin = $state(itemRightMargin);
 
 // 前回の有効な値を保持
 let lastValidMinorTick = $state(minorTick);
@@ -104,6 +108,7 @@ function applySettings() {
     showAllDay: localShowAllDay,
     defaultColorOpacity: localDefaultColorOpacity,
     weekStartsOn: localWeekStartsOn,
+    itemRightMargin: localItemRightMargin,
   });
 }
 
@@ -222,6 +227,25 @@ function handleBackdropClick(event: MouseEvent) {
           <option value={6}>土曜日</option>
           <option value={7}>日曜日</option>
         </select>
+      </div>
+      
+      <div class="setting-item">
+        <label for="itemRightMargin">
+          アイテム右側の余白 (px)
+        </label>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <input
+            id="itemRightMargin"
+            type="range"
+            min="0"
+            max="20"
+            step="1"
+            bind:value={localItemRightMargin}
+            onchange={handleToggleChange}
+            style="flex: 1;"
+          />
+          <span style="min-width: 50px;">{localItemRightMargin}px</span>
+        </div>
       </div>
     </div>
     
