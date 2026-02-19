@@ -12,6 +12,8 @@ interface Props {
   defaultColorOpacity?: number;
   weekStartsOn?: number;
   itemRightMargin?: number;
+  showParent?: boolean;
+  parentDisplayIndex?: number;
   onClose: () => void;
   onChange: (settings: {
     minorTick: number;
@@ -22,6 +24,8 @@ interface Props {
     defaultColorOpacity: number;
     weekStartsOn: number;
     itemRightMargin: number;
+    showParent: boolean;
+    parentDisplayIndex: number;
   }) => void;
 }
 
@@ -34,6 +38,8 @@ let {
   defaultColorOpacity = 0.5,
   weekStartsOn = 1,
   itemRightMargin = 10,
+  showParent = true,
+  parentDisplayIndex = -1,
   onClose,
   onChange,
 }: Props = $props();
@@ -47,6 +53,8 @@ let localShowAllDay = $state(showAllDay);
 let localDefaultColorOpacity = $state(defaultColorOpacity);
 let localWeekStartsOn = $state(weekStartsOn);
 let localItemRightMargin = $state(itemRightMargin);
+let localShowParent = $state(showParent);
+let localParentDisplayIndex = $state(parentDisplayIndex);
 
 // 前回の有効な値を保持
 let lastValidMinorTick = $state(minorTick);
@@ -109,6 +117,8 @@ function applySettings() {
     defaultColorOpacity: localDefaultColorOpacity,
     weekStartsOn: localWeekStartsOn,
     itemRightMargin: localItemRightMargin,
+    showParent: localShowParent,
+    parentDisplayIndex: localParentDisplayIndex,
   });
 }
 
@@ -242,6 +252,33 @@ function handleBackdropClick(event: MouseEvent) {
           onchange={handleToggleChange}
           style="width: 80px;"
         />
+      </div>
+      
+      <div class="setting-item">
+        <label>
+          <input
+            type="checkbox"
+            bind:checked={localShowParent}
+            onchange={handleToggleChange}
+          />
+          親階層を表示
+        </label>
+      </div>
+      
+      <div class="setting-item">
+        <label for="parentDisplayIndex">
+          表示する親階層のインデックス
+        </label>
+        <input
+          id="parentDisplayIndex"
+          type="number"
+          bind:value={localParentDisplayIndex}
+          onchange={handleToggleChange}
+          style="width: 80px;"
+        />
+        <span style="font-size: 12px; color: #666; margin-left: 8px;">
+          (-1で最後の親を表示)
+        </span>
       </div>
     </div>
     

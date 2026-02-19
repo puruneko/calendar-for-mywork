@@ -74,6 +74,12 @@ interface Props {
   /** 週の開始曜日（1=月曜, 7=日曜） */
   weekStartsOn?: number;
   
+  /** parent表示を有効にするか */
+  showParent?: boolean;
+  
+  /** parent表示の階層インデックス（slice(n)に適用） */
+  parentDisplayIndex?: number;
+  
   /** セルクリック時のイベントハンドラ */
   onCellClick?: (dateTime: DateTime, clickPosition: { x: number; y: number }) => void;
   
@@ -87,6 +93,8 @@ interface Props {
     defaultColorOpacity: number;
     weekStartsOn: number;
     itemRightMargin: number;
+    showParent: boolean;
+    parentDisplayIndex: number;
   }) => void;
 }
 
@@ -104,6 +112,8 @@ let {
   defaultColorOpacity = 0.5,
   itemRightMargin = 10,
   weekStartsOn = 1,
+  showParent = true,
+  parentDisplayIndex = -1,
   onItemClick,
   onItemMove,
   onItemResize,
@@ -482,6 +492,8 @@ function handleSettingsChange(settings: {
   defaultColorOpacity: number;
   weekStartsOn: number;
   itemRightMargin: number;
+  showParent: boolean;
+  parentDisplayIndex: number;
 }) {
   // 親コンポーネントに設定変更を通知
   onSettingsChange?.(settings);
@@ -554,15 +566,13 @@ function getItemStyle(item: CalendarItem & { left?: number; width?: number }): s
   const height = (duration / 60) * hourHeight;
   
   // 重なり時の横位置・横幅
-  // 右マージンを考慮して、アイテムの最大幅を制限
-  const maxWidth = `calc(100% - ${itemRightMargin}px)`;
   const left = item.left !== undefined ? `${item.left}%` : '0px';
-  const width = item.width !== undefined ? `calc(${item.width}% - ${itemRightMargin}px)` : maxWidth;
+  const width = item.width !== undefined ? `${item.width}%` : '100%';
   
   // 基本スタイル
   let styleStr = item.left !== undefined && item.width !== undefined
     ? `top: ${top}px; height: ${height}px; left: ${left}; width: ${width};`
-    : `top: ${top}px; height: ${height}px; width: ${maxWidth};`;
+    : `top: ${top}px; height: ${height}px;`;
   
   // カスタムスタイルを適用
   if (item.style) {
@@ -641,6 +651,8 @@ function getItemClass(item: CalendarItem): string {
       {defaultColorOpacity}
       {weekStartsOn}
       {itemRightMargin}
+      {showParent}
+      {parentDisplayIndex}
       onClose={toggleSettings}
       onChange={handleSettingsChange}
     />
@@ -658,7 +670,7 @@ function getItemClass(item: CalendarItem): string {
 
     <!-- 各曜日の列 -->
     {#each weekDays as day, dayIndex}
-      <div class="day-column">
+      <div class="day-column" style="padding-right: {itemRightMargin}px;">
         <!-- 曜日ヘッダー -->
         <div class="day-header">
           <div class="weekday">{formatWeekday(day)}</div>
@@ -730,8 +742,9 @@ function getItemClass(item: CalendarItem): string {
                   role="button"
                   tabindex="0"
                 >
-                  {#if item.parents && item.parents.length > 0}
-                    <div class="item-parent">{item.parents[item.parents.length - 1]}</div>
+                  {#if showParent && item.parents && item.parents.length > 0}
+                    {@const index = parentDisplayIndex >= 0 && parentDisplayIndex < item.parents.length ? parentDisplayIndex : item.parents.length - 1}
+                    <div class="item-parent">{item.parents[index]}</div>
                   {/if}
                   <div class="item-title">{item.title}</div>
                   {#if item.start && item.end}
@@ -897,7 +910,7 @@ function getItemClass(item: CalendarItem): string {
   .calendar-item {
     position: absolute;
     left: 0;
-    width: 100%;
+    right: 0;
     border-radius: 4px;
     cursor: pointer;
     pointer-events: auto;
@@ -1042,7 +1055,7 @@ function getItemClass(item: CalendarItem): string {
   .drag-preview {
     position: absolute;
     left: 0;
-    width: 100%;
+    right: 0;
     background-color: rgba(33, 150, 243, 0.1);
     border: 2px dashed rgba(33, 150, 243, 0.4);
     border-radius: 4px;
