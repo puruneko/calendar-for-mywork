@@ -553,14 +553,16 @@ function getItemStyle(item: CalendarItem & { left?: number; width?: number }): s
   const top = (minutesFromStart / 60) * hourHeight;
   const height = (duration / 60) * hourHeight;
   
-  // 重なり時の横位置・横幅（day-columnのpaddingで右余白を確保）
+  // 重なり時の横位置・横幅
+  // 右マージンを考慮して、アイテムの最大幅を制限
+  const maxWidth = `calc(100% - ${itemRightMargin}px)`;
   const left = item.left !== undefined ? `${item.left}%` : '0px';
-  const width = item.width !== undefined ? `${item.width}%` : '100%';
+  const width = item.width !== undefined ? `calc(${item.width}% - ${itemRightMargin}px)` : maxWidth;
   
   // 基本スタイル
   let styleStr = item.left !== undefined && item.width !== undefined
     ? `top: ${top}px; height: ${height}px; left: ${left}; width: ${width};`
-    : `top: ${top}px; height: ${height}px;`;
+    : `top: ${top}px; height: ${height}px; width: ${maxWidth};`;
   
   // カスタムスタイルを適用
   if (item.style) {
@@ -656,7 +658,7 @@ function getItemClass(item: CalendarItem): string {
 
     <!-- 各曜日の列 -->
     {#each weekDays as day, dayIndex}
-      <div class="day-column" style="padding-right: {itemRightMargin}px;">
+      <div class="day-column">
         <!-- 曜日ヘッダー -->
         <div class="day-header">
           <div class="weekday">{formatWeekday(day)}</div>
@@ -973,13 +975,15 @@ function getItemClass(item: CalendarItem): string {
   }
 
   .item-parent {
-    font-size: 10px;
-    color: #888;
+    font-size: 9px;
+    color: #999;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    margin-bottom: 2px;
+    margin-bottom: 1px;
     font-weight: 400;
+    line-height: 1.1;
+    opacity: 0.8;
   }
 
   .item-title {
@@ -989,12 +993,14 @@ function getItemClass(item: CalendarItem): string {
     overflow: hidden;
     text-overflow: ellipsis;
     color: #333;
+    line-height: 1.3;
   }
 
   .item-time {
     font-size: 11px;
     color: #555;
     margin-top: 2px;
+    line-height: 1.2;
   }
 
   /* ドラッグ中のスタイル */
@@ -1073,11 +1079,12 @@ function getItemClass(item: CalendarItem): string {
 
   /* アイテム本体 */
   .item-content {
-    padding: 4px 8px;
+    padding: 2px 6px 4px 6px;
     flex: 1;
     overflow: hidden;
     cursor: move;
     pointer-events: auto;
+    position: relative;
   }
   
   .item-content * {
