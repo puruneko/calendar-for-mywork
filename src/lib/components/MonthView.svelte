@@ -271,6 +271,13 @@ function handleResizeEnd() {
 function handleDragStart(event: DragEvent, item: CalendarItem, startDayIndex?: number, weekDays?: DateTime[]) {
   draggedItem = item;
   
+  // ドラッグ中のアイテムを視覚的に示し、pointer-eventsを無効化
+  const target = event.target as HTMLElement;
+  const barElement = target.closest('.multi-day-bar') as HTMLElement;
+  if (barElement) {
+    barElement.style.opacity = '0.5';
+  }
+  
   // マルチデイバーの場合、つかんだ位置（アイテム内での相対日数）を計算
   if (startDayIndex !== undefined && weekDays && isMultiDayItem(item)) {
     const itemStart = getItemStart(item);
@@ -306,7 +313,14 @@ function handleDragStart(event: DragEvent, item: CalendarItem, startDayIndex?: n
 }
 
 // DnD: ドラッグ終了
-function handleDragEnd() {
+function handleDragEnd(event: DragEvent) {
+  // ドラッグ中のアイテムの透明度を戻す
+  const target = event.target as HTMLElement;
+  const barElement = target.closest('.multi-day-bar') as HTMLElement;
+  if (barElement) {
+    barElement.style.opacity = '1';
+  }
+  
   draggedItem = null;
   dragOverDay = null;
 }
@@ -472,7 +486,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
   </div>
 
   <!-- カレンダーコンテンツ（スクロール可能） -->
-  <div class="calendar-content">
+  <div class="calendar-content" class:dragging-active={draggedItem !== null}>
     <!-- カレンダーテーブル -->
     <table class="calendar-table">
     <!-- 曜日ヘッダー -->
@@ -534,6 +548,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
                     {#each multiDayItemsInWeek.filter(({startIndex, lane}) => dayIndex === startIndex && lane === laneIndex) as {item, span}}
                       <div 
                         class="multi-day-bar"
+                        class:dragging={draggedItem === item}
                         draggable="true"
                         ondragstart={(e) => handleDragStart(e, item, dayIndex, week)}
                         ondragend={handleDragEnd}
@@ -612,6 +627,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
                   {#each singleDayItems.slice(0, remainingSlots) as item (item.id)}
                     <div 
                       class="month-item single-day-item"
+                      class:dragging={draggedItem === item}
                       draggable="true"
                       ondragstart={(e) => handleDragStart(e, item)}
                       ondragend={handleDragEnd}
@@ -665,6 +681,29 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     flex: 1;
     overflow-y: auto; /* 縦スクロール可能 */
     min-height: 0; /* flexアイテムのデフォルトmin-heightを上書き */
+    position: relative;
+  }
+
+  /* ドラッグ中: レイヤー構造を明確に */
+  
+  /* 中間層: セル（透明） - ドラッグイベントを受け取るため前面に */
+  .calendar-content.dragging-active .day-cell {
+    position: relative;
+    z-index: 10; /* アイテムより前面 */
+    background-color: transparent; /* 透明にして下のアイテムが見える */
+  }
+  
+  /* 最下層: ドラッグ中でないアイテム（背面） */
+  .calendar-content.dragging-active .multi-day-bar:not(.dragging),
+  .calendar-content.dragging-active .month-item:not(.dragging) {
+    z-index: 1 !important; /* セルより下に（!importantで通常のz-index: 5を上書き） */
+    pointer-events: none; /* イベントを無効化 */
+  }
+
+  /* 最前面: ドラッグ中のアイテム */
+  .calendar-content.dragging-active .multi-day-bar.dragging,
+  .calendar-content.dragging-active .month-item.dragging {
+    z-index: 100 !important; /* ドラッグ中のアイテムは最前面 */
   }
 
   .month-header {
@@ -761,7 +800,8 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     position: absolute;
     top: 0;
     left: 0;
-    z-index: var(--z-base);
+    z-index: 5; /* セルより前面に表示してクリック可能に */
+    pointer-events: auto;
   }
 
   .multi-day-bar:hover {
@@ -771,6 +811,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
   .multi-day-bar:active {
     cursor: grabbing;
   }
+  
 
   .bar-content {
     flex: 1;
