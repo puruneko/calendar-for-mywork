@@ -97,8 +97,8 @@ function getMultiDayItemClass(item: CalendarItem, day: DateTime): string {
 
 // アイテムの背景色を取得
 function getItemBgColor(item: CalendarItem): string {
-  if (item.style?.backgroundColor) {
-    return item.style.backgroundColor as string;
+  if (item.style?.backgroundColor && typeof item.style.backgroundColor === 'string') {
+    return item.style.backgroundColor;
   }
   if (item.type === 'task') {
     const task = item as any;
