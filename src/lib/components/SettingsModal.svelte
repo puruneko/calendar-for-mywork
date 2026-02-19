@@ -7,8 +7,9 @@ interface Props {
   minorTick: number;
   startHour: number;
   endHour: number;
-  showWeekend: boolean;
-  showAllDay: boolean;
+  showWeekend?: boolean;
+  showAllDay?: boolean;
+  defaultColorOpacity?: number;
   onClose: () => void;
   onChange: (settings: {
     minorTick: number;
@@ -16,6 +17,7 @@ interface Props {
     endHour: number;
     showWeekend: boolean;
     showAllDay: boolean;
+    defaultColorOpacity: number;
   }) => void;
 }
 
@@ -25,6 +27,7 @@ let {
   endHour = $bindable(),
   showWeekend = $bindable(),
   showAllDay = $bindable(),
+  defaultColorOpacity = 0.5,
   onClose,
   onChange,
 }: Props = $props();
@@ -35,6 +38,7 @@ let localStartHour = $state(startHour);
 let localEndHour = $state(endHour);
 let localShowWeekend = $state(showWeekend);
 let localShowAllDay = $state(showAllDay);
+let localDefaultColorOpacity = $state(defaultColorOpacity);
 
 // 前回の有効な値を保持
 let lastValidMinorTick = $state(minorTick);
@@ -94,6 +98,7 @@ function applySettings() {
     endHour: localEndHour,
     showWeekend: localShowWeekend,
     showAllDay: localShowAllDay,
+    defaultColorOpacity: localDefaultColorOpacity,
   });
 }
 
@@ -174,6 +179,25 @@ function handleBackdropClick(event: MouseEvent) {
           />
           終日予定を表示
         </label>
+      </div>
+      
+      <div class="setting-item">
+        <label for="defaultColorOpacity">
+          アイテムのデフォルト透明度
+        </label>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <input
+            id="defaultColorOpacity"
+            type="range"
+            min="0"
+            max="1"
+            step="0.05"
+            bind:value={localDefaultColorOpacity}
+            onchange={handleToggleChange}
+            style="flex: 1;"
+          />
+          <span style="min-width: 50px;">{Math.round(localDefaultColorOpacity * 100)}%</span>
+        </div>
       </div>
     </div>
     

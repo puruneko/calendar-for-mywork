@@ -57,6 +57,12 @@ interface Props {
   /** アイテムの色のデフォルト透明度（0-1） */
   defaultColorOpacity?: number;
   
+  /** アイテム表示領域の左マージン（px） */
+  itemLeftMargin?: number;
+  
+  /** セルクリック時のイベントハンドラ */
+  onCellClick?: (dateTime: DateTime, clickPosition: { x: number; y: number }) => void;
+  
   /** 設定変更時のイベントハンドラ */
   onSettingsChange?: (settings: {
     minorTick: number;
@@ -79,10 +85,12 @@ let {
   showWeekend = true,
   showAllDay = true,
   defaultColorOpacity = 0.5,
+  itemLeftMargin = 5,
   onItemClick,
   onItemMove,
   onItemResize,
   onViewChange,
+  onCellClick,
   onSettingsChange,
 }: Props = $props();
 
@@ -458,6 +466,27 @@ function handleSettingsChange(settings: {
   onSettingsChange?.(settings);
 }
 
+// セルクリックハンドラ
+function handleCellClick(event: MouseEvent, day: DateTime) {
+  // アイテムクリックの場合はイベントが伝播しないのでここには来ない
+  const target = event.currentTarget as HTMLElement;
+  const rect = target.getBoundingClientRect();
+  
+  // クリック位置（グリッド内の相対座標）
+  const clickPosition = {
+    x: event.clientX - rect.left,
+    y: event.clientY - rect.top,
+  };
+  
+  // Y座標から時刻を計算
+  const hourHeight = 60; // 1時間あたりのピクセル高さ
+  const minutesFromStart = (clickPosition.y / hourHeight) * 60;
+  const clickDateTime = day.startOf('day').set({ hour: startHour }).plus({ minutes: minutesFromStart });
+  
+  // 親コンポーネントに通知
+  onCellClick?.(clickDateTime, clickPosition);
+}
+
 // カラー値に透明度を追加（透明度指定がない場合のみ）
 function applyDefaultOpacity(color: string | undefined, opacity: number): string | undefined {
   if (!color) return undefined;
@@ -503,18 +532,25 @@ function getItemStyle(item: CalendarItem & { left?: number; width?: number }): s
   const top = (minutesFromStart / 60) * hourHeight;
   const height = (duration / 60) * hourHeight;
   
-  // 重なり時の横位置・横幅
-  const left = item.left !== undefined ? `${item.left}%` : '4px';
-  const right = item.width !== undefined ? `${100 - item.left! - item.width}%` : '4px';
+  // 重なり時の横位置・横幅（左マージンを考慮）
+  const leftMargin = itemLeftMargin;
+  const left = item.left !== undefined ? `calc(${leftMargin}px + ${item.left}%)` : `${leftMargin}px`;
+  const right = item.width !== undefined ? `calc(${100 - item.left! - item.width}%)` : `${leftMargin}px`;
   
   // 基本スタイル
   let styleStr = item.left !== undefined && item.width !== undefined
     ? `top: ${top}px; height: ${height}px; left: ${left}; right: ${right};`
-    : `top: ${top}px; height: ${height}px;`;
+    : `top: ${top}px; height: ${height}px; left: ${leftMargin}px; right: ${leftMargin}px;`;
   
   // カスタムスタイルを適用
   if (item.style) {
     const customStyles: string[] = [];
+    
+    // デバッグ: styleプロパティの内容を確認
+    if (item.title.includes('カスタムスタイル')) {
+      console.log(`[DEBUG] ${item.title} - style:`, item.style);
+      console.log(`[DEBUG] Object.entries:`, Object.entries(item.style));
+    }
     
     for (const [key, value] of Object.entries(item.style)) {
       if (value !== undefined && value !== null && value !== '') {
@@ -531,6 +567,10 @@ function getItemStyle(item: CalendarItem & { left?: number; width?: number }): s
           customStyles.push(`${cssKey}: ${value}`);
         }
       }
+    }
+    
+    if (item.title.includes('カスタムスタイル')) {
+      console.log(`[DEBUG] ${item.title} - customStyles:`, customStyles);
     }
     
     if (customStyles.length > 0) {
@@ -605,6 +645,7 @@ function getItemClass(item: CalendarItem): string {
           class="day-grid"
           ondragover={(e) => handleDayDragOver(e, day)}
           ondrop={(e) => handleDrop(e, day)}
+          onclick={(e) => handleCellClick(e, day)}
         >
           {#each timeSlots as slot}
             <div class="grid-cell"></div>
@@ -659,7 +700,7 @@ function getItemClass(item: CalendarItem): string {
                 <!-- アイテム本体（クリック可能） -->
                 <div
                   class="item-content"
-                  onclick={() => handleItemClick(item)}
+                  onclick={(e) => { e.stopPropagation(); handleItemClick(item); }}
                   onkeydown={(e) => e.key === 'Enter' && handleItemClick(item)}
                   role="button"
                   tabindex="0"
@@ -972,24 +1013,25 @@ function getItemClass(item: CalendarItem): string {
     position: absolute;
     left: 0;
     right: 0;
-    height: 12px;
+    height: 5px;
     cursor: ns-resize;
     z-index: 20;
     pointer-events: auto;
     user-select: none;
     -webkit-user-drag: none;
+    background-color: rgba(158, 158, 158, 0.2);
   }
 
   .resize-handle-top {
-    top: -4px;
+    top: 0;
   }
 
   .resize-handle-bottom {
-    bottom: -4px;
+    bottom: 0;
   }
 
   .resize-handle:hover {
-    background-color: rgba(33, 150, 243, 0.3);
+    background-color: rgba(158, 158, 158, 0.4);
   }
 
   /* アイテム本体 */

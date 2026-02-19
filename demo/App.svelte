@@ -151,6 +151,7 @@ let endHour = $state(20);
 let minorTick = $state(15);
 let showWeekend = $state(true);
 let showAllDay = $state(true);
+let defaultColorOpacity = $state(0.5);
 
 // イベントハンドラ
 function handleItemClick(item: CalendarItem) {
@@ -187,6 +188,7 @@ function handleSettingsChange(settings: {
   endHour: number;
   showWeekend: boolean;
   showAllDay: boolean;
+  defaultColorOpacity: number;
 }) {
   console.log('Settings changed:', settings);
   minorTick = settings.minorTick;
@@ -194,6 +196,13 @@ function handleSettingsChange(settings: {
   endHour = settings.endHour;
   showWeekend = settings.showWeekend;
   showAllDay = settings.showAllDay;
+  defaultColorOpacity = settings.defaultColorOpacity;
+}
+
+function handleCellClick(dateTime: DateTime, clickPosition: { x: number; y: number }) {
+  console.log('Cell clicked!');
+  console.log('DateTime:', dateTime.toISO());
+  console.log('Click Position:', clickPosition);
 }
 </script>
 
@@ -212,11 +221,13 @@ function handleSettingsChange(settings: {
       {minorTick}
       {showWeekend}
       {showAllDay}
+      {defaultColorOpacity}
       tickInterval={60}
       onItemClick={handleItemClick}
       onItemMove={handleItemMove}
       onItemResize={handleItemResize}
       onViewChange={handleViewChange}
+      onCellClick={handleCellClick}
       onSettingsChange={handleSettingsChange}
     />
   </main>
