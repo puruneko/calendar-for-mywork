@@ -704,7 +704,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
   .calendar-content.dragging-active .multi-day-bar.dragging,
   .calendar-content.dragging-active .month-item.dragging {
     z-index: 100 !important; /* セルより前面 */
-    pointer-events: none; /* ドラッグ中はイベント受け取らない */
+    /* pointer-eventsはautoのまま（ドラッグ処理に必要） */
   }
 
   .month-header {
