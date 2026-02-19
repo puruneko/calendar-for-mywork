@@ -806,12 +806,30 @@ function getItemClass(item: CalendarItem): string {
   }
 
   /* Appointment スタイル - 固定的で動かしにくいデザイン */
-  .appointment {
+  .appointment__old {
     background: var(--appointment-bg, rgba(224, 224, 224, 0.85));
     border: 2px solid #616161; /* 太い外枠で固定感を表現 */
     border-radius: 2px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15); /* より強い影で重厚感 */
   }
+  .appointment {
+  --base: var(--appointment-bg, rgba(224, 224, 224, 0.85)); /* ←ここを好きな色に変えるだけ */
+
+  background: var(--base);
+  border-radius: 2px;
+
+  position: relative;
+
+  /* ▼ 外側の高さ（浮き） */
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.35) inset,   /* 上面の光 */
+    0 -2px 0 rgba(0,0,0,0.1) inset,        /* 下側の締まり */
+    0 1px 3px rgba(0,0,0,0.25),             /* 接地影 */
+    0 2px 2px rgba(0,0,0,0.18);           /* 拡散影 */
+
+  border: 1px solid color-mix(in srgb, rightgray, black 25%);
+}
+
   
   .appointment:hover {
     box-shadow: 0 3px 6px rgba(0, 0, 0, 0.25); /* ホバー時も強めの影 */
