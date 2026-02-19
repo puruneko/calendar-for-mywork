@@ -18,6 +18,7 @@ let items = $state<CalendarItem[]>([
     end: DateTime.now().set({ hour: 12, minute: 0, second: 0, millisecond: 0 }),
     status: 'doing',
     tags: ['仕事'],
+    parents: ['新規事業プロジェクト', '企画フェーズ'],
   } as Task,
   {
     id: '2',
@@ -27,6 +28,7 @@ let items = $state<CalendarItem[]>([
     end: DateTime.now().set({ hour: 15, minute: 30, second: 0, millisecond: 0 }),
     status: 'todo',
     tags: ['開発'],
+    parents: ['機能開発Sprint#5', '開発フェーズ', 'QA'],
   } as Task,
   {
     id: '3',
@@ -35,6 +37,7 @@ let items = $state<CalendarItem[]>([
     start: DateTime.now().plus({ days: 1 }).set({ hour: 10, minute: 0, second: 0, millisecond: 0 }),
     end: DateTime.now().plus({ days: 1 }).set({ hour: 11, minute: 30, second: 0, millisecond: 0 }),
     status: 'done',
+    parents: ['UIリニューアル', 'ドキュメント整備'],
   } as Task,
   
   // Appointment examples
@@ -44,6 +47,7 @@ let items = $state<CalendarItem[]>([
     title: 'チームミーティング',
     start: DateTime.now().set({ hour: 10, minute: 0, second: 0, millisecond: 0 }),
     end: DateTime.now().set({ hour: 11, minute: 0, second: 0, millisecond: 0 }),
+    parents: ['週次定例会'],
   } as Appointment,
   {
     id: '5',
@@ -51,6 +55,7 @@ let items = $state<CalendarItem[]>([
     title: 'クライアント打ち合わせ',
     start: DateTime.now().plus({ days: 2 }).set({ hour: 14, minute: 0, second: 0, millisecond: 0 }),
     end: DateTime.now().plus({ days: 2 }).set({ hour: 16, minute: 0, second: 0, millisecond: 0 }),
+    parents: ['A社案件', '要件定義フェーズ'],
   } as Appointment,
   {
     id: '6',
@@ -58,6 +63,7 @@ let items = $state<CalendarItem[]>([
     title: 'ランチミーティング',
     start: DateTime.now().plus({ days: 3 }).set({ hour: 12, minute: 0, second: 0, millisecond: 0 }),
     end: DateTime.now().plus({ days: 3 }).set({ hour: 13, minute: 0, second: 0, millisecond: 0 }),
+    // parentsなし（トップレベル）
   } as Appointment,
   
   // カスタムスタイルのサンプル

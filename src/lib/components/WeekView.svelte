@@ -728,6 +728,9 @@ function getItemClass(item: CalendarItem): string {
                   role="button"
                   tabindex="0"
                 >
+                  {#if item.parents && item.parents.length > 0}
+                    <div class="item-parent">{item.parents[item.parents.length - 1]}</div>
+                  {/if}
                   <div class="item-title">{item.title}</div>
                   {#if item.start && item.end}
                     <div class="item-time">
@@ -967,6 +970,16 @@ function getItemClass(item: CalendarItem): string {
   
   .task .item-content {
     cursor: move;
+  }
+
+  .item-parent {
+    font-size: 10px;
+    color: #888;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 2px;
+    font-weight: 400;
   }
 
   .item-title {

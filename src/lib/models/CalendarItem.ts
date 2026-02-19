@@ -29,4 +29,7 @@ export interface CalendarItem {
   
   /** カスタムスタイル（CSSプロパティ） */
   style?: Partial<CSSStyleDeclaration>;
+  
+  /** 親階層の配列（0番目がTop parent、最後が直近のparent） */
+  parents?: string[];
 }

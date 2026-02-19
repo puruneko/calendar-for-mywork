@@ -233,19 +233,15 @@ function handleBackdropClick(event: MouseEvent) {
         <label for="itemRightMargin">
           アイテム右側の余白 (px)
         </label>
-        <div style="display: flex; align-items: center; gap: 12px;">
-          <input
-            id="itemRightMargin"
-            type="range"
-            min="0"
-            max="20"
-            step="1"
-            bind:value={localItemRightMargin}
-            onchange={handleToggleChange}
-            style="flex: 1;"
-          />
-          <span style="min-width: 50px;">{localItemRightMargin}px</span>
-        </div>
+        <input
+          id="itemRightMargin"
+          type="number"
+          min="0"
+          max="50"
+          bind:value={localItemRightMargin}
+          onchange={handleToggleChange}
+          style="width: 80px;"
+        />
       </div>
     </div>
     
