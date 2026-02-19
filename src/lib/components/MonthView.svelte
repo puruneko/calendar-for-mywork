@@ -256,7 +256,7 @@ function handleResizeEnd() {
   document.removeEventListener('mouseup', handleResizeEnd);
   
   // すべての複数日バーのdraggableを再有効化
-  const allBars = document.querySelectorAll('.multi-day-bar');
+  const allBars = document.querySelectorAll('.multi-day-bar-segment, .multi-day-bar');
   allBars.forEach(el => {
     (el as HTMLElement).setAttribute('draggable', 'true');
   });
@@ -273,7 +273,7 @@ function handleDragStart(event: DragEvent, item: CalendarItem, startDayIndex?: n
   
   // ドラッグ中のアイテムを視覚的に示し、pointer-eventsを無効化
   const target = event.target as HTMLElement;
-  const barElement = target.closest('.multi-day-bar') as HTMLElement;
+  const barElement = target.closest('.multi-day-bar-segment, .multi-day-bar') as HTMLElement;
   if (barElement) {
     barElement.style.opacity = '0.5';
   }
@@ -316,7 +316,7 @@ function handleDragStart(event: DragEvent, item: CalendarItem, startDayIndex?: n
 function handleDragEnd(event: DragEvent) {
   // ドラッグ中のアイテムの透明度を戻す
   const target = event.target as HTMLElement;
-  const barElement = target.closest('.multi-day-bar') as HTMLElement;
+  const barElement = target.closest('.multi-day-bar-segment, .multi-day-bar') as HTMLElement;
   if (barElement) {
     barElement.style.opacity = '1';
   }
@@ -544,42 +544,47 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
               <div class="multi-day-spacers">
                 {#each Array(multiDayCountForThisDay) as _, laneIndex}
                   <div class="multi-day-spacer">
-                    <!-- このセルが開始日で、このレーンに配置されるバーを表示 -->
-                    {#each multiDayItemsInWeek.filter(({startIndex, lane}) => dayIndex === startIndex && lane === laneIndex) as {item, span}}
+                    <!-- このセルに表示されるバーセグメント（開始日・中間・終了日を含む） -->
+                    {#each multiDayItemsInWeek.filter(({startIndex, span, lane}) => dayIndex >= startIndex && dayIndex < startIndex + span && lane === laneIndex) as {item, startIndex, span}}
+                      {@const isFirstSegment = dayIndex === startIndex}
+                      {@const isLastSegment = dayIndex === startIndex + span - 1}
+                      {@const segmentIndex = dayIndex - startIndex}
                       <div 
-                        class="multi-day-bar"
+                        class="multi-day-bar-segment"
+                        class:first-segment={isFirstSegment}
+                        class:last-segment={isLastSegment}
+                        class:middle-segment={!isFirstSegment && !isLastSegment}
                         class:dragging={draggedItem === item}
                         draggable="true"
-                        ondragstart={(e) => handleDragStart(e, item, dayIndex, week)}
+                        ondragstart={(e) => handleDragStart(e, item, startIndex, week)}
                         ondragend={handleDragEnd}
                         onclick={(e) => { e.stopPropagation(); onItemClick?.(item); }}
-                        style="
-                          background-color: {getItemBgColor(item)};
-                          width: {span === 1 ? '100%' : `calc(${span * 100}% + ${(span - 1) * 9}px)`};
-                        "
+                        style="background-color: {getItemBgColor(item)};"
                       >
-                        <!-- リサイズハンドル（左端） -->
-                        <div 
-                          class="resize-handle resize-handle-left"
-                          onmousedown={(e) => handleResizeStart(e, item, 'left')}
-                          ondragstart={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                          draggable="false"
-                        ></div>
+                        <!-- リサイズハンドル（左端 - 最初のセグメントのみ） -->
+                        {#if isFirstSegment}
+                          <div 
+                            class="resize-handle resize-handle-left"
+                            onmousedown={(e) => handleResizeStart(e, item, 'left')}
+                            ondragstart={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                            draggable="false"
+                          ></div>
+                        {/if}
                         
-                        <!-- バー本体 -->
-                        <div 
-                          class="bar-content"
-                        >
-                          {item.title}
+                        <!-- バー本体 - 最初のセグメントのみタイトル表示 -->
+                        <div class="bar-content">
+                          {#if isFirstSegment}{item.title}{/if}
                         </div>
                         
-                        <!-- リサイズハンドル（右端） -->
-                        <div 
-                          class="resize-handle resize-handle-right"
-                          onmousedown={(e) => handleResizeStart(e, item, 'right')}
-                          ondragstart={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                          draggable="false"
-                        ></div>
+                        <!-- リサイズハンドル（右端 - 最後のセグメントのみ） -->
+                        {#if isLastSegment}
+                          <div 
+                            class="resize-handle resize-handle-right"
+                            onmousedown={(e) => handleResizeStart(e, item, 'right')}
+                            ondragstart={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                            draggable="false"
+                          ></div>
+                        {/if}
                       </div>
                     {/each}
                   </div>
@@ -694,6 +699,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
   }
   
   /* 最下層: ドラッグ中でないアイテム（背面） */
+  .calendar-content.dragging-active .multi-day-bar-segment:not(.dragging),
   .calendar-content.dragging-active .multi-day-bar:not(.dragging),
   .calendar-content.dragging-active .month-item:not(.dragging) {
     z-index: 1 !important; /* セルより下に（!importantで通常のz-index: 5を上書き） */
@@ -701,6 +707,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
   }
   
   /* 最前層: ドラッグ中のアイテム - セルやその他のアイテムより前面に */
+  .calendar-content.dragging-active .multi-day-bar-segment.dragging,
   .calendar-content.dragging-active .multi-day-bar.dragging,
   .calendar-content.dragging-active .month-item.dragging {
     z-index: 100 !important; /* セルより前面 */
@@ -787,6 +794,49 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     overflow: visible; /* バーがはみ出せるように */
   }
 
+  /* 複数日バーのセグメント（各セルに1つずつ配置） */
+  .multi-day-bar-segment {
+    padding: 0;
+    font-size: 11px;
+    color: #333;
+    font-weight: 500;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    height: 18px;
+    cursor: move;
+    display: flex;
+    align-items: center;
+    position: relative;
+    width: 100%;
+    z-index: 5;
+    pointer-events: auto;
+  }
+
+  /* 最初のセグメント：左側を丸める */
+  .multi-day-bar-segment.first-segment {
+    border-top-left-radius: 3px;
+    border-bottom-left-radius: 3px;
+  }
+
+  /* 最後のセグメント：右側を丸める */
+  .multi-day-bar-segment.last-segment {
+    border-top-right-radius: 3px;
+    border-bottom-right-radius: 3px;
+  }
+
+  /* 中間セグメント：角を丸めない */
+  .multi-day-bar-segment.middle-segment {
+    border-radius: 0;
+  }
+
+  .multi-day-bar-segment:hover {
+    opacity: 0.8;
+  }
+
+  .multi-day-bar-segment:active {
+    cursor: grabbing;
+  }
+
+  /* 旧スタイルとの互換性のため残す */
   .multi-day-bar {
     padding: 0;
     font-size: 11px;
@@ -801,7 +851,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     position: absolute;
     top: 0;
     left: 0;
-    z-index: 5; /* セルより前面に表示してクリック可能に */
+    z-index: 5;
     pointer-events: auto;
   }
 
