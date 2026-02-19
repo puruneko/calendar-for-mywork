@@ -553,13 +553,13 @@ function getItemStyle(item: CalendarItem & { left?: number; width?: number }): s
   const top = (minutesFromStart / 60) * hourHeight;
   const height = (duration / 60) * hourHeight;
   
-  // 重なり時の横位置・横幅（day-columnのpaddingで左余白を確保するため、ここではマージン不要）
+  // 重なり時の横位置・横幅（day-columnのpaddingで右余白を確保）
   const left = item.left !== undefined ? `${item.left}%` : '0px';
-  const right = item.width !== undefined ? `${100 - item.left! - item.width}%` : '0px';
+  const width = item.width !== undefined ? `${item.width}%` : '100%';
   
   // 基本スタイル
   let styleStr = item.left !== undefined && item.width !== undefined
-    ? `top: ${top}px; height: ${height}px; left: ${left}; right: ${right};`
+    ? `top: ${top}px; height: ${height}px; left: ${left}; width: ${width};`
     : `top: ${top}px; height: ${height}px;`;
   
   // カスタムスタイルを適用
@@ -884,15 +884,15 @@ function getItemClass(item: CalendarItem): string {
     position: absolute;
     top: 0;
     left: 0;
-    right: 0;
-    bottom: 0;
+    width: 100%;
+    height: 100%;
     pointer-events: none;
   }
 
   .calendar-item {
     position: absolute;
     left: 0;
-    right: 0;
+    width: 100%;
     border-radius: 4px;
     cursor: pointer;
     pointer-events: auto;
@@ -1023,7 +1023,7 @@ function getItemClass(item: CalendarItem): string {
   .drag-preview {
     position: absolute;
     left: 0;
-    right: 0;
+    width: 100%;
     background-color: rgba(33, 150, 243, 0.1);
     border: 2px dashed rgba(33, 150, 243, 0.4);
     border-radius: 4px;
