@@ -194,10 +194,7 @@ function closeOverlay() {
           </div>
           
           <div class="day-items">
-            {@const visibleItems = dayItems.slice(0, MAX_ITEMS_PER_DAY)}
-            {@const hiddenCount = Math.max(0, dayItems.length - MAX_ITEMS_PER_DAY)}
-            
-            {#each visibleItems as item (item.id)}
+            {#each dayItems.slice(0, MAX_ITEMS_PER_DAY) as item (item.id)}
               {#if isMultiDayItem(item)}
                 {@const multiDayClass = getMultiDayItemClass(item, day)}
                 <div 
@@ -223,12 +220,12 @@ function closeOverlay() {
               {/if}
             {/each}
             
-            {#if hiddenCount > 0}
+            {#if dayItems.length > MAX_ITEMS_PER_DAY}
               <div 
                 class="more-items"
                 onclick={(e) => handleMoreClick(e, day, dayItems)}
               >
-                +{hiddenCount} more
+                +{dayItems.length - MAX_ITEMS_PER_DAY} more
               </div>
             {/if}
           </div>
