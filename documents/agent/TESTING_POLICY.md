@@ -273,3 +273,120 @@ UI操作系テストが不安定な場合：
 E2EテストをDOMテストへ劣化させず、  
 実際のユーザー操作を再現した統合検証として成立させることを目的とする。
 
+---
+
+## 📚 タイムアウト問題のデバッグと再発防止
+
+### タイムアウトの主要原因
+
+E2Eテストのタイムアウトは、以下の原因で発生する：
+
+1. **レンダリングエラー（最重要）**
+   - コンポーネントが例外をスローし、DOMに追加されない
+   - `waitForSelector()`が要素を見つけられず30秒タイムアウト
+   - **必ずコンソールエラーを先に確認すること**
+
+2. **配列の不正アクセス**
+   - 固定インデックス（`array[6]`）による undefined 参照
+   - 動的データ構造では必ず `array[array.length - 1]` を使用
+   - アクセス前に長さチェック（`if (array.length === 0) return`）
+
+3. **DateTime計算の不正確さ**
+   - `endOf()`の時刻情報（23:59:59.999）が残り、diff計算がずれる
+   - 日単位の計算では必ず `.startOf('day')` で正規化
+   - `Math.ceil()` より `Math.floor()` が安全
+
+4. **Viteホットリロードの遅延**
+   - コード変更がブラウザに反映されない
+   - サーバー再起動後は5秒待機してからテスト実行
+   - キャッシュクリアが必要な場合もある
+
+### デバッグフロー（必須手順）
+
+タイムアウトが発生したら、**この順序で**確認すること：
+
+#### 1. コンソールエラーの確認（最優先）
+```typescript
+// デバッグテストを作成
+test('Debug: Check console errors', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('console', msg => {
+    if (msg.type() === 'error') errors.push(msg.text());
+  });
+  page.on('pageerror', err => {
+    errors.push(`Page error: ${err.message}`);
+  });
+  
+  await page.goto('http://localhost:5176');
+  await page.waitForTimeout(2000);
+  
+  console.log('Console errors:', errors);
+  // エラーがあれば実装を修正
+});
+```
+
+#### 2. DOM要素の存在確認
+```typescript
+const count = await page.locator('.target-element').count();
+console.log('Element count:', count); // 0なら要素が生成されていない
+```
+
+#### 3. HTML構造の確認
+```typescript
+const html = await page.locator('#app').innerHTML();
+console.log('HTML length:', html.length); // 短すぎる場合はレンダリング失敗
+```
+
+#### 4. サーバー再起動
+```powershell
+Get-Process | Where-Object { $_.ProcessName -eq "node" } | Stop-Process -Force
+npm run dev
+Start-Sleep -Seconds 5
+# テスト再実行
+```
+
+### 実装時の注意事項
+
+#### ❌ 避けるべきパターン
+```typescript
+// 固定インデックス
+const weekEnd = week[6].endOf('day'); // week[6]がundefinedの可能性
+
+// 時刻情報が残るDateTime計算
+const end = date.endOf('month').plus({ days: 7 });
+const days = Math.ceil(end.diff(start, 'days').days) + 1; // 不正確
+```
+
+#### ✅ 推奨パターン
+```typescript
+// 安全な配列アクセス
+if (week.length === 0) return [];
+const weekEnd = week[week.length - 1].endOf('day');
+
+// 正規化されたDateTime計算
+const end = date.endOf('month').startOf('day').plus({ days: 7 });
+const days = Math.floor(end.diff(start, 'days').days) + 1;
+```
+
+### 再発防止チェックリスト
+
+テスト実装・修正時に以下を確認すること：
+
+- [ ] コンソールエラーを確認したか
+- [ ] 配列アクセスに固定インデックスを使っていないか
+- [ ] DateTime計算で `.startOf('day')` を使っているか
+- [ ] サーバー再起動後に十分な待機時間を取っているか
+- [ ] デバッグテストで早期にエラーを検出したか
+- [ ] ブラウザ確認を開発者に丸投げしていないか
+
+### 報告フォーマット
+
+タイムアウト問題を報告する際は以下を含めること：
+
+1. **根本原因**: エラーメッセージと発生箇所
+2. **実施した修正**: Before/Afterのコード
+3. **再発防止策**: 具体的なベストプラクティス
+4. **検証結果**: テスト結果（件数、時間）
+
+---
+
