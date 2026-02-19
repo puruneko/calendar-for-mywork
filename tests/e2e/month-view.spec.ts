@@ -769,9 +769,9 @@ test.describe('MonthView - +N more機能（セル内展開）', () => {
     }
   });
 
-  test('展開されたセルに青い枠線とシャドウが表示されること', async ({ page }) => {
-    console.log('[TEST] 展開されたセルに青い枠線とシャドウが表示されることを確認');
-    console.log('[REASON] 展開状態を視覚的に明確にする必要がある');
+  test('展開されたセルが自然なスタイルで表示され、日付が見えること', async ({ page }) => {
+    console.log('[TEST] 展開されたセルが自然なスタイルで表示され、日付が見えることを確認');
+    console.log('[REASON] 日付が見えて、セルの通常の枠を使う自然な展開が必要');
 
     const moreLink = page.locator('.more-items').first();
     const count = await moreLink.count();
@@ -780,23 +780,38 @@ test.describe('MonthView - +N more機能（セル内展開）', () => {
       await moreLink.click();
       
       const expandedCell = page.locator('.day-cell.expanded');
-      const dayItemsDiv = expandedCell.locator('.day-items');
+      await expect(expandedCell).toBeVisible();
+
+      // 日付が見えることを確認
+      const dayNumber = expandedCell.locator('.day-number');
+      await expect(dayNumber).toBeVisible();
       
-      // スタイルを確認
+      const dayNumberZIndex = await dayNumber.evaluate(el => {
+        return window.getComputedStyle(el).zIndex;
+      });
+      console.log(`[INFO] Day number z-index: ${dayNumberZIndex}`);
+      // z-indexが設定されていることを確認（autoまたは数値）
+      expect(dayNumberZIndex).toBeTruthy();
+
+      // 展開されたアイテムエリアのスタイルを確認
+      const dayItemsDiv = expandedCell.locator('.day-items');
       const styles = await dayItemsDiv.evaluate((el) => {
         const computed = window.getComputedStyle(el);
         return {
           border: computed.border,
           boxShadow: computed.boxShadow,
           position: computed.position,
+          paddingTop: computed.paddingTop,
         };
       });
 
       console.log(`[INFO] Expanded cell styles:`, styles);
       expect(styles.position).toBe('absolute');
+      expect(styles.border).toContain('224'); // rgb(224, 224, 224) - セルと同じ枠
       expect(styles.boxShadow).not.toBe('none');
+      expect(parseInt(styles.paddingTop)).toBeGreaterThan(20); // 日付分のパディング
 
-      console.log('[PASS] Expanded cell has proper visual styling');
+      console.log('[PASS] Expanded cell has natural styling with visible date');
     } else {
       console.log('[INFO] No +N more links available');
     }

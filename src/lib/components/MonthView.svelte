@@ -36,11 +36,28 @@ function getMonthDays(date: DateTime): DateTime[] {
   const startWeekday = startOfMonth.weekday; // 1=月曜、7=日曜
   
   // カレンダー表示開始日（月曜始まり）
+  // 1日が月曜の場合は前月の最終週から開始
   const calendarStart = startOfMonth.minus({ days: startWeekday - 1 });
   
-  // 6週間分（42日）表示
+  // 月末の曜日
+  const endWeekday = endOfMonth.weekday; // 1=月曜、7=日曜
+  
+  // カレンダー表示終了日
+  // 月末が日曜(7)の場合は翌月の最初の週まで含める
+  let calendarEnd: DateTime;
+  if (endWeekday === 7) {
+    // 日曜日で終わる場合、翌週の日曜日まで
+    calendarEnd = endOfMonth.plus({ days: 7 });
+  } else {
+    // それ以外は、その週の日曜日まで
+    calendarEnd = endOfMonth.plus({ days: 7 - endWeekday });
+  }
+  
+  // 日数を計算
+  const dayCount = Math.ceil(calendarEnd.diff(calendarStart, 'days').days) + 1;
+  
   const days: DateTime[] = [];
-  for (let i = 0; i < 42; i++) {
+  for (let i = 0; i < dayCount; i++) {
     days.push(calendarStart.plus({ days: i }));
   }
   
@@ -52,7 +69,8 @@ let monthDays = $derived(getMonthDays(currentDate));
 // 週ごとにグループ化
 let weeks = $derived.by(() => {
   const result: DateTime[][] = [];
-  for (let i = 0; i < 6; i++) {
+  const weekCount = Math.ceil(monthDays.length / 7);
+  for (let i = 0; i < weekCount; i++) {
     result.push(monthDays.slice(i * 7, (i + 1) * 7));
   }
   return result;
@@ -115,6 +133,10 @@ function prevMonth() {
 
 function nextMonth() {
   onViewChange?.(currentDate.plus({ months: 1 }));
+}
+
+function goToToday() {
+  onViewChange?.(DateTime.now());
 }
 
 // セルクリック
@@ -200,9 +222,12 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
 <div class="month-view">
   <!-- ヘッダー -->
   <div class="month-header">
-    <button class="nav-button" onclick={prevMonth}>&lt;</button>
-    <h2 class="month-title">{currentDate.toFormat('yyyy年M月')}</h2>
-    <button class="nav-button" onclick={nextMonth}>&gt;</button>
+    <div class="header-left">
+      <button class="nav-button" onclick={prevMonth}>&lt;</button>
+      <h2 class="month-title">{currentDate.toFormat('yyyy年M月')}</h2>
+      <button class="nav-button" onclick={nextMonth}>&gt;</button>
+    </div>
+    <button class="today-button" onclick={goToToday}>Today</button>
   </div>
 
   <!-- 曜日ヘッダー -->
@@ -310,6 +335,12 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     border-bottom: 1px solid #e0e0e0;
   }
 
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
   .month-title {
     font-size: 20px;
     font-weight: 600;
@@ -327,6 +358,21 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
 
   .nav-button:hover {
     background-color: #f5f5f5;
+  }
+
+  .today-button {
+    background-color: #2196f3;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 16px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  .today-button:hover {
+    background-color: #1976d2;
   }
 
   .weekday-header {
@@ -411,18 +457,18 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
   }
 
   .day-cell.expanded .day-items {
+    /* セルの下部から展開 */
     position: absolute;
     top: 0;
-    left: 0;
-    right: 0;
+    left: -1px; /* 左の枠線を重ねる */
+    right: -1px; /* 右の枠線を重ねる */
     background-color: white;
-    border: 2px solid #2196f3;
-    border-radius: 4px;
+    border: 1px solid #e0e0e0; /* セルと同じ枠線 */
     padding: 4px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    padding-top: 24px; /* 日付の高さ分を確保 */
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     z-index: 100;
-    max-height: 400px;
-    overflow-y: auto;
+    max-height: none; /* 制限なし */
   }
 
   .day-cell.today {
@@ -446,6 +492,8 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     padding: 2px 4px;
     border-radius: 3px;
     display: inline-block;
+    position: relative;
+    z-index: 101; /* 展開されたアイテムより前面に */
   }
 
   .day-number:hover {
