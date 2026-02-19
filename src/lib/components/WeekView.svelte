@@ -670,7 +670,7 @@ function getItemClass(item: CalendarItem): string {
 
     <!-- 各曜日の列 -->
     {#each weekDays as day, dayIndex}
-      <div class="day-column" style="padding-right: {itemRightMargin}px;">
+      <div class="day-column">
         <!-- 曜日ヘッダー -->
         <div class="day-header">
           <div class="weekday">{formatWeekday(day)}</div>
@@ -715,7 +715,7 @@ function getItemClass(item: CalendarItem): string {
           {/if}
 
           <!-- アイテム表示 -->
-          <div class="items-container">
+          <div class="items-container" style="right: {itemRightMargin}px;">
             {#each getItemsWithLayout(day) as item (item.id)}
               <div
                 class="{getItemClass(item)} {draggedItem?.id === item.id ? 'dragging' : ''}"
@@ -902,7 +902,7 @@ function getItemClass(item: CalendarItem): string {
     position: absolute;
     top: 0;
     left: 0;
-    width: 100%;
+    right: 0;
     height: 100%;
     pointer-events: none;
   }
