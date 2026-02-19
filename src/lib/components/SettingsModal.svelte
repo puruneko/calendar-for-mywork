@@ -10,6 +10,7 @@ interface Props {
   showWeekend?: boolean;
   showAllDay?: boolean;
   defaultColorOpacity?: number;
+  weekStartsOn?: number;
   onClose: () => void;
   onChange: (settings: {
     minorTick: number;
@@ -18,6 +19,7 @@ interface Props {
     showWeekend: boolean;
     showAllDay: boolean;
     defaultColorOpacity: number;
+    weekStartsOn: number;
   }) => void;
 }
 
@@ -28,6 +30,7 @@ let {
   showWeekend = $bindable(),
   showAllDay = $bindable(),
   defaultColorOpacity = 0.5,
+  weekStartsOn = 1,
   onClose,
   onChange,
 }: Props = $props();
@@ -39,6 +42,7 @@ let localEndHour = $state(endHour);
 let localShowWeekend = $state(showWeekend);
 let localShowAllDay = $state(showAllDay);
 let localDefaultColorOpacity = $state(defaultColorOpacity);
+let localWeekStartsOn = $state(weekStartsOn);
 
 // 前回の有効な値を保持
 let lastValidMinorTick = $state(minorTick);
@@ -99,6 +103,7 @@ function applySettings() {
     showWeekend: localShowWeekend,
     showAllDay: localShowAllDay,
     defaultColorOpacity: localDefaultColorOpacity,
+    weekStartsOn: localWeekStartsOn,
   });
 }
 
@@ -198,6 +203,25 @@ function handleBackdropClick(event: MouseEvent) {
           />
           <span style="min-width: 50px;">{Math.round(localDefaultColorOpacity * 100)}%</span>
         </div>
+      </div>
+      
+      <div class="setting-item">
+        <label for="weekStartsOn">
+          週の開始曜日
+        </label>
+        <select
+          id="weekStartsOn"
+          bind:value={localWeekStartsOn}
+          onchange={handleToggleChange}
+        >
+          <option value={1}>月曜日</option>
+          <option value={2}>火曜日</option>
+          <option value={3}>水曜日</option>
+          <option value={4}>木曜日</option>
+          <option value={5}>金曜日</option>
+          <option value={6}>土曜日</option>
+          <option value={7}>日曜日</option>
+        </select>
       </div>
     </div>
     

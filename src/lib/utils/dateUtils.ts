@@ -21,9 +21,15 @@ export function getWeekEnd(date: DateTime): DateTime {
 
 /**
  * 指定された週の日付配列を取得（月曜日～日曜日）
+ * @param date - 基準日
+ * @param weekStartsOn - 週の開始曜日（1=月曜, 7=日曜）デフォルトは1（月曜）
  */
-export function getWeekDays(date: DateTime): DateTime[] {
-  const start = getWeekStart(date);
+export function getWeekDays(date: DateTime, weekStartsOn: number = 1): DateTime[] {
+  // 指定された曜日まで戻る
+  let start = date.startOf('day');
+  while (start.weekday !== weekStartsOn) {
+    start = start.minus({ days: 1 });
+  }
   return Array.from({ length: 7 }, (_, i) => start.plus({ days: i }));
 }
 

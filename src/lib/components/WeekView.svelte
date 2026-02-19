@@ -11,6 +11,17 @@ import type { CalendarItem } from '../models';
 import { getWeekDays, formatTime, formatWeekday, generateTimeSlots, snapToMinorTick } from '../utils';
 import SettingsModal from './SettingsModal.svelte';
 
+// Z-index層管理（集中管理）
+const Z_INDEX_LAYERS = {
+  GRID_LINES: 1,           // 横罫線・minorグリッド線
+  DRAG_PREVIEW: 5,         // ドラッグプレビュー
+  CALENDAR_ITEMS: 10,      // カレンダーアイテム
+  RESIZE_HANDLES: 20,      // リサイズハンドル
+  CURRENT_TIME_LINE: 100,  // 現在時刻ライン（最前面）
+  MODAL_BACKDROP: 1000,    // モーダル背景
+  MODAL_CONTENT: 1001,     // モーダルコンテンツ
+} as const;
+
 interface Props {
   /** 表示するアイテムリスト */
   items: CalendarItem[];
@@ -60,6 +71,9 @@ interface Props {
   /** アイテム表示領域の左マージン（px） */
   itemLeftMargin?: number;
   
+  /** 週の開始曜日（1=月曜, 7=日曜） */
+  weekStartsOn?: number;
+  
   /** セルクリック時のイベントハンドラ */
   onCellClick?: (dateTime: DateTime, clickPosition: { x: number; y: number }) => void;
   
@@ -70,6 +84,8 @@ interface Props {
     endHour: number;
     showWeekend: boolean;
     showAllDay: boolean;
+    defaultColorOpacity: number;
+    weekStartsOn: number;
   }) => void;
 }
 
@@ -86,6 +102,7 @@ let {
   showAllDay = true,
   defaultColorOpacity = 0.5,
   itemLeftMargin = 5,
+  weekStartsOn = 1,
   onItemClick,
   onItemMove,
   onItemResize,
@@ -96,7 +113,7 @@ let {
 
 // 週の日付リストを取得（土日表示の設定を反映）
 let weekDays = $derived.by(() => {
-  const allDays = getWeekDays(currentDate);
+  const allDays = getWeekDays(currentDate, weekStartsOn);
   if (showWeekend) {
     return allDays;
   } else {
@@ -461,6 +478,8 @@ function handleSettingsChange(settings: {
   endHour: number;
   showWeekend: boolean;
   showAllDay: boolean;
+  defaultColorOpacity: number;
+  weekStartsOn: number;
 }) {
   // 親コンポーネントに設定変更を通知
   onSettingsChange?.(settings);
@@ -532,15 +551,14 @@ function getItemStyle(item: CalendarItem & { left?: number; width?: number }): s
   const top = (minutesFromStart / 60) * hourHeight;
   const height = (duration / 60) * hourHeight;
   
-  // 重なり時の横位置・横幅（左マージンを考慮）
-  const leftMargin = itemLeftMargin;
-  const left = item.left !== undefined ? `calc(${leftMargin}px + ${item.left}%)` : `${leftMargin}px`;
-  const right = item.width !== undefined ? `calc(${100 - item.left! - item.width}%)` : `${leftMargin}px`;
+  // 重なり時の横位置・横幅（day-columnのpaddingで左余白を確保するため、ここではマージン不要）
+  const left = item.left !== undefined ? `${item.left}%` : '0px';
+  const right = item.width !== undefined ? `${100 - item.left! - item.width}%` : '0px';
   
   // 基本スタイル
   let styleStr = item.left !== undefined && item.width !== undefined
     ? `top: ${top}px; height: ${height}px; left: ${left}; right: ${right};`
-    : `top: ${top}px; height: ${height}px; left: ${leftMargin}px; right: ${leftMargin}px;`;
+    : `top: ${top}px; height: ${height}px;`;
   
   // カスタムスタイルを適用
   if (item.style) {
@@ -616,6 +634,8 @@ function getItemClass(item: CalendarItem): string {
       {endHour}
       {showWeekend}
       {showAllDay}
+      {defaultColorOpacity}
+      {weekStartsOn}
       onClose={toggleSettings}
       onChange={handleSettingsChange}
     />
@@ -633,7 +653,7 @@ function getItemClass(item: CalendarItem): string {
 
     <!-- 各曜日の列 -->
     {#each weekDays as day, dayIndex}
-      <div class="day-column">
+      <div class="day-column" style="padding-left: {itemLeftMargin}px;">
         <!-- 曜日ヘッダー -->
         <div class="day-header">
           <div class="weekday">{formatWeekday(day)}</div>
@@ -868,8 +888,8 @@ function getItemClass(item: CalendarItem): string {
 
   .calendar-item {
     position: absolute;
-    left: 4px;
-    right: 4px;
+    left: 0;
+    right: 0;
     border-radius: 4px;
     cursor: pointer;
     pointer-events: auto;
@@ -993,14 +1013,14 @@ function getItemClass(item: CalendarItem): string {
     right: 0;
     height: 2px;
     pointer-events: none;
-    z-index: 10;
+    z-index: 100;
   }
 
   /* ドラッグプレビュー（移動先の影） */
   .drag-preview {
     position: absolute;
-    left: 4px;
-    right: 4px;
+    left: 0;
+    right: 0;
     background-color: rgba(33, 150, 243, 0.1);
     border: 2px dashed rgba(33, 150, 243, 0.4);
     border-radius: 4px;
@@ -1013,13 +1033,14 @@ function getItemClass(item: CalendarItem): string {
     position: absolute;
     left: 0;
     right: 0;
-    height: 5px;
+    height: 4px;
     cursor: ns-resize;
     z-index: 20;
     pointer-events: auto;
     user-select: none;
     -webkit-user-drag: none;
-    background-color: rgba(158, 158, 158, 0.2);
+    background-color: rgba(158, 158, 158, 0);
+    transition: background-color 0.2s ease;
   }
 
   .resize-handle-top {
@@ -1030,7 +1051,7 @@ function getItemClass(item: CalendarItem): string {
     bottom: 0;
   }
 
-  .resize-handle:hover {
+  .calendar-item:hover .resize-handle {
     background-color: rgba(158, 158, 158, 0.4);
   }
 
@@ -1050,6 +1071,6 @@ function getItemClass(item: CalendarItem): string {
   /* カレンダーアイテム全体をドラッグ可能にする */
   .calendar-item {
     cursor: move;
-    z-index: 10; /* 横罫線(z-index:1)より上に表示 */
+    z-index: 10;
   }
 </style>
