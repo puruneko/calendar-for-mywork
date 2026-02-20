@@ -686,156 +686,155 @@ test.describe('MonthView - 複数日にまたがるアイテム', () => {
   });
 });
 
-test.describe('MonthView - セル展開機能（cell-resizer）', () => {
+test.describe('MonthView - セル展開機能（day-expander）', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('http://localhost:5176');
     await page.click('button:has-text("月表示")');
     await page.waitForSelector('.month-view');
   });
 
-  test('上限以上のアイテムがある日にcell-resizerが表示されること', async ({ page }) => {
-    console.log('[TEST] 上限以上のアイテムがある日にcell-resizerが表示されることを確認');
-    console.log('[REASON] 隠れたアイテムを展開できることを示すresizerが必要');
+  test('上限以上のアイテムがある日にday-expanderが表示されること', async ({ page }) => {
+    console.log('[TEST] 上限以上のアイテムがある日にday-expanderが表示されることを確認');
+    console.log('[REASON] 隠れたアイテムを展開できることを示すボタンが必要');
 
-    const resizer = page.locator('.cell-resizer').first();
-    const count = await resizer.count();
+    const expander = page.locator('.day-expander').first();
+    const count = await expander.count();
 
-    console.log(`[INFO] cell-resizer count: ${count}`);
+    console.log(`[INFO] day-expander count: ${count}`);
     if (count > 0) {
-      await expect(resizer).toBeVisible();
+      await expect(expander).toBeVisible();
 
       // カーソルがs-resize（下矢印）であることを確認
-      const cursor = await resizer.evaluate((el) =>
+      const cursor = await expander.evaluate((el) =>
         window.getComputedStyle(el).cursor
       );
-      console.log(`[INFO] Resizer cursor: ${cursor}`);
+      console.log(`[INFO] Expander cursor: ${cursor}`);
       expect(cursor).toBe('s-resize');
 
-      console.log('[PASS] cell-resizer is displayed for overflow cells');
+      console.log('[PASS] day-expander is displayed for overflow cells');
     } else {
       console.log('[INFO] No overflow cells in current view');
     }
   });
 
-  test('cell-resizerをクリックするとセルが展開されること', async ({ page }) => {
-    console.log('[TEST] cell-resizerをクリックするとセルが展開されることを確認');
-    console.log('[REASON] resizerクリックで全件表示に切り替わる必要がある');
+  test('day-expanderをクリックするとexpanded-panelが表示されること', async ({ page }) => {
+    console.log('[TEST] day-expanderをクリックするとexpanded-panelが表示されることを確認');
+    console.log('[REASON] expanderクリックで全件表示パネルが開く必要がある');
 
-    const resizer = page.locator('.cell-resizer').first();
-    const count = await resizer.count();
+    const expander = page.locator('.day-expander').first();
+    const count = await expander.count();
 
     if (count > 0) {
-      await resizer.click();
+      await expander.click();
 
-      // .grid-cell.expanded が表示される
-      const expandedCell = page.locator('.grid-cell.expanded');
-      await expect(expandedCell).toBeVisible();
+      // .expanded-panel が表示される
+      const panel = page.locator('.expanded-panel');
+      await expect(panel).toBeVisible();
 
-      // resizerがexpandedクラスを持つ（n-resizeカーソル）
-      const expandedResizer = expandedCell.locator('.cell-resizer.expanded');
-      await expect(expandedResizer).toBeVisible();
+      // 閉じるボタン（.expanded-panel-close）が表示される
+      const closeBtn = panel.locator('.expanded-panel-close');
+      await expect(closeBtn).toBeVisible();
 
-      const cursor = await expandedResizer.evaluate((el) =>
+      const cursor = await closeBtn.evaluate((el) =>
         window.getComputedStyle(el).cursor
       );
-      console.log(`[INFO] Expanded resizer cursor: ${cursor}`);
+      console.log(`[INFO] Close button cursor: ${cursor}`);
       expect(cursor).toBe('n-resize');
 
-      console.log('[PASS] Cell is expanded on cell-resizer click');
+      console.log('[PASS] expanded-panel opens on day-expander click');
     } else {
-      console.log('[INFO] No cell-resizer available');
+      console.log('[INFO] No day-expander available');
     }
   });
 
-  test('展開されたセルに全アイテムが表示されること', async ({ page }) => {
-    console.log('[TEST] 展開されたセルに全アイテムが表示されることを確認');
+  test('expanded-panelに全アイテムが表示されること', async ({ page }) => {
+    console.log('[TEST] expanded-panelに全アイテムが表示されることを確認');
     console.log('[REASON] 隠れたアイテムも含めて全て表示する必要がある');
 
-    const resizer = page.locator('.cell-resizer').first();
-    const count = await resizer.count();
+    const expander = page.locator('.day-expander').first();
+    const count = await expander.count();
 
     if (count > 0) {
-      await resizer.click();
+      await expander.click();
 
-      const expandedCell = page.locator('.grid-cell.expanded');
-      const singleItems = expandedCell.locator('.single-day-item');
-      const multiItems = expandedCell.locator('.multi-day-item-expanded');
+      const panel = page.locator('.expanded-panel');
+      const singleItems = panel.locator('.single-day-item');
+      const multiItems = panel.locator('.multi-day-item-expanded');
       const singleCount = await singleItems.count();
       const multiCount = await multiItems.count();
       const expandedItemCount = singleCount + multiCount;
 
-      console.log(`[INFO] Expanded cell shows ${expandedItemCount} items (single: ${singleCount}, multi: ${multiCount})`);
+      console.log(`[INFO] Expanded panel shows ${expandedItemCount} items (single: ${singleCount}, multi: ${multiCount})`);
       expect(expandedItemCount).toBeGreaterThan(0);
 
-      console.log('[PASS] All items are displayed in expanded cell');
+      console.log('[PASS] All items are displayed in expanded panel');
     } else {
-      console.log('[INFO] No cell-resizer available');
+      console.log('[INFO] No day-expander available');
     }
   });
 
-  test('展開済みcell-resizerをクリックすると折りたたまれること', async ({ page }) => {
-    console.log('[TEST] 展開済みcell-resizerをクリックすると折りたたまれることを確認');
-    console.log('[REASON] ユーザーが展開したセルを閉じられる必要がある');
+  test('expanded-panel-closeをクリックするとパネルが閉じること', async ({ page }) => {
+    console.log('[TEST] expanded-panel-closeをクリックするとパネルが閉じることを確認');
+    console.log('[REASON] ユーザーが展開したパネルを閉じられる必要がある');
 
-    const resizer = page.locator('.cell-resizer').first();
-    const count = await resizer.count();
+    const expander = page.locator('.day-expander').first();
+    const count = await expander.count();
 
     if (count > 0) {
-      // 展開
-      await resizer.click();
-      const expandedCell = page.locator('.grid-cell.expanded');
-      await expect(expandedCell).toBeVisible();
+      // パネルを開く
+      await expander.click();
+      const panel = page.locator('.expanded-panel');
+      await expect(panel).toBeVisible();
 
-      // 再度クリックして折りたたむ
-      const expandedResizer = expandedCell.locator('.cell-resizer.expanded');
-      await expandedResizer.click();
+      // 閉じるボタンをクリック
+      const closeBtn = panel.locator('.expanded-panel-close');
+      await closeBtn.click();
 
-      await expect(expandedCell).not.toBeVisible();
+      // パネルが閉じる
+      await expect(panel).not.toBeVisible();
 
-      // resizerが通常状態に戻る
-      await expect(resizer).toBeVisible();
-      const cursor = await resizer.evaluate((el) =>
+      // day-expanderが通常状態に戻る
+      await expect(expander).toBeVisible();
+      const cursor = await expander.evaluate((el) =>
         window.getComputedStyle(el).cursor
       );
       expect(cursor).toBe('s-resize');
 
-      console.log('[PASS] Cell collapses on second resizer click');
+      console.log('[PASS] Panel closes on close button click');
     } else {
-      console.log('[INFO] No cell-resizer available');
+      console.log('[INFO] No day-expander available');
     }
   });
 
-  test('展開時に他のセルの高さが変わらないこと', async ({ page }) => {
-    console.log('[TEST] 展開時に他のセルの高さが変わらないことを確認');
-    console.log('[REASON] overflow:visibleで最前面に展開するため、他セルは影響を受けない');
+  test('expanded-panel表示中に他のセルの高さが変わらないこと', async ({ page }) => {
+    console.log('[TEST] expanded-panel表示中に他のセルの高さが変わらないことを確認');
+    console.log('[REASON] パネルは絶対配置で他セルに影響を与えない');
 
     const gridCells = page.locator('.grid-cell');
-    const resizer = page.locator('.cell-resizer').first();
+    const expander = page.locator('.day-expander').first();
 
-    if (await resizer.count() > 0) {
+    if (await expander.count() > 0) {
       // 展開前の全セルの高さ
       const heightsBefore = await gridCells.evaluateAll((cells) =>
         cells.map((el) => el.getBoundingClientRect().height)
       );
 
-      await resizer.click();
+      await expander.click();
       await page.waitForTimeout(100);
 
-      // 展開後の全セルの高さ（展開セル以外）
+      // 展開後の全セルの高さ（全て同じはず）
       const heightsAfter = await gridCells.evaluateAll((cells) =>
-        cells.map((el, i) => ({ h: el.getBoundingClientRect().height, expanded: el.classList.contains('expanded') }))
+        cells.map((el) => el.getBoundingClientRect().height)
       );
 
-      // 展開されていないセルの高さは変わらない
+      // 全セルの高さが変わらない
       for (let i = 0; i < heightsBefore.length; i++) {
-        if (!heightsAfter[i].expanded) {
-          expect(Math.abs(heightsAfter[i].h - heightsBefore[i])).toBeLessThan(2);
-        }
+        expect(Math.abs(heightsAfter[i] - heightsBefore[i])).toBeLessThan(2);
       }
 
-      console.log('[PASS] Other cells height unchanged when one cell is expanded');
+      console.log('[PASS] Other cells height unchanged when panel is expanded');
     } else {
-      console.log('[INFO] No cell-resizer available');
+      console.log('[INFO] No day-expander available');
     }
   });
 });

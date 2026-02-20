@@ -27,6 +27,10 @@ let {
 
 // セル展開状態（展開されている日を保持）
 let expandedDay: DateTime | null = $state(null);
+// 展開パネルの位置（calendar-content基準の絶対座標）
+let expandedPanelStyle: string = $state('');
+// calendar-contentのDOM参照
+let calendarContentEl: HTMLElement | null = $state(null);
 
 // DnD状態
 let draggedItem = $state<CalendarItem | null>(null);
@@ -153,21 +157,40 @@ function handleDayNumberClick(event: MouseEvent, day: DateTime) {
   onDayClick?.(day);
 }
 
-// +N more クリック（セル展開）
-function handleMoreClick(event: MouseEvent, day: DateTime) {
-  event.stopPropagation();
-  expandedDay = day;
-}
-
-// hideクリック（セル折りたたみ）
-function handleHideClick(event: MouseEvent) {
-  event.stopPropagation();
-  expandedDay = null;
-}
-
 // セルが展開されているかチェック
 function isExpanded(day: DateTime): boolean {
   return expandedDay !== null && expandedDay.hasSame(day, 'day');
+}
+
+// day-expanderクリック: 展開パネルをトグル
+function toggleExpand(event: MouseEvent, day: DateTime, cellEl: HTMLElement) {
+  event.stopPropagation();
+  if (isExpanded(day)) {
+    expandedDay = null;
+    expandedPanelStyle = '';
+    return;
+  }
+
+  // calendar-content基準の絶対座標を計算
+  if (!calendarContentEl) return;
+  const contentRect = calendarContentEl.getBoundingClientRect();
+  const cellRect = cellEl.getBoundingClientRect();
+  const scrollTop = calendarContentEl.scrollTop;
+
+  // パネルはgrid-cellの左端・上端から始まり、下に向かって伸びる
+  const left = cellRect.left - contentRect.left;
+  const top = cellRect.top - contentRect.top + scrollTop;
+  const width = cellRect.width;
+
+  expandedPanelStyle = `left: ${left}px; top: ${top}px; width: ${width}px;`;
+  expandedDay = day;
+}
+
+// 展開パネル外クリックで閉じる
+function handlePanelOutsideClick(event: MouseEvent) {
+  event.stopPropagation();
+  expandedDay = null;
+  expandedPanelStyle = '';
 }
 
 // リサイズ開始（複数日バーの左端/右端）
@@ -613,7 +636,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
   </div>
 
   <!-- カレンダーコンテンツ（スクロール可能） -->
-  <div class="calendar-content" class:dragging-active={draggedItem !== null}>
+  <div class="calendar-content" class:dragging-active={draggedItem !== null} bind:this={calendarContentEl}>
 
     <!-- 曜日ヘッダー（固定列グリッド） -->
     <div class="weekday-header">
@@ -625,6 +648,55 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
       <div class="weekday">土</div>
       <div class="weekday">日</div>
     </div>
+
+    <!-- 展開パネル（calendar-content基準で絶対配置・最前面） -->
+    {#if expandedDay !== null}
+      {@const expandedItems = getItemsForDay(expandedDay)}
+      {@const expandedMultiDay = expandedItems.filter(item => isMultiDayItem(item))}
+      {@const expandedSingleDay = expandedItems.filter(item => !isMultiDayItem(item))}
+      <!-- オーバーレイ背景（クリックで閉じる） -->
+      <div class="expanded-panel-overlay" onclick={handlePanelOutsideClick}></div>
+      <!-- 展開パネル本体 -->
+      <div class="expanded-panel" style={expandedPanelStyle}>
+        <!-- 複数日アイテム -->
+        {#each expandedMultiDay as item (item.id)}
+          <div
+            class="month-item multi-day-item-expanded"
+            draggable="true"
+            ondragstart={(e) => handleSingleDayDragStart(e, item)}
+            ondragend={handleDragEnd}
+            onclick={(e) => { e.stopPropagation(); onItemClick?.(item); }}
+          >
+            <span class="item-dot" style="background-color: {getItemBgColor(item)};"></span>
+            <span class="item-time">{isTimed(item) && getItemStart(item) ? formatTime(getItemStart(item)!) : ''}</span>
+            <span class="item-title">{item.title}</span>
+          </div>
+        {/each}
+        <!-- 単日アイテム（全件） -->
+        {#each expandedSingleDay as item (item.id)}
+          <div
+            class="month-item single-day-item"
+            draggable="true"
+            ondragstart={(e) => handleSingleDayDragStart(e, item)}
+            ondragend={handleDragEnd}
+            onclick={(e) => { e.stopPropagation(); onItemClick?.(item); }}
+          >
+            <span class="item-dot" style="background-color: {getItemBgColor(item)};"></span>
+            <span class="item-time">{isTimed(item) && getItemStart(item) ? formatTime(getItemStart(item)!) : ''}</span>
+            <span class="item-title">{item.title}</span>
+          </div>
+        {/each}
+        <!-- 閉じるボタン（▲） -->
+        <button
+          class="day-expander expanded-panel-close"
+          onclick={(e) => { e.stopPropagation(); expandedDay = null; expandedPanelStyle = ''; }}
+          title="折りたたむ"
+          aria-label="折りたたむ"
+        >
+          <span class="expander-arrow">▲</span>
+        </button>
+      </div>
+    {/if}
 
     <!-- カレンダーボディ -->
     <div class="calendar-body">
@@ -715,76 +787,40 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
 
               <div
                 class="grid-cell"
-                class:expanded={expanded}
                 class:drag-over={dragOverDay?.hasSame(day, 'day')}
                 onclick={(e) => handleCellClick(e, day)}
                 ondragover={(e) => handleDragOver(e, day)}
                 ondrop={(e) => handleDrop(e, day)}
               >
-                <!-- 通常時: 単日アイテム表示エリア -->
+                <!-- 通常時: 単日アイテム表示エリア（上限まで） -->
                 <div class="day-items">
-                  {#if expanded}
-                    <!-- 展開時: 全アイテム（複数日 + 単日）を表示 -->
-                    {@const allDayItemsList = getItemsForDay(day)}
-                    {@const multiDayItemsList = allDayItemsList.filter(item => isMultiDayItem(item))}
-                    {@const singleDayItemsExpanded = allDayItemsList.filter(item => !isMultiDayItem(item))}
-
-                    <!-- 複数日アイテム -->
-                    {#each multiDayItemsList as item (item.id)}
-                      <div
-                        class="month-item multi-day-item-expanded"
-                        draggable="true"
-                        ondragstart={(e) => handleSingleDayDragStart(e, item)}
-                        ondragend={handleDragEnd}
-                        onclick={(e) => { e.stopPropagation(); onItemClick?.(item); }}
-                      >
-                        <span class="item-dot" style="background-color: {getItemBgColor(item)};"></span>
-                        <span class="item-time">{isTimed(item) && getItemStart(item) ? formatTime(getItemStart(item)!) : ''}</span>
-                        <span class="item-title">{item.title}</span>
-                      </div>
-                    {/each}
-
-                    <!-- 単日アイテム -->
-                    {#each singleDayItemsExpanded as item (item.id)}
-                      <div
-                        class="month-item single-day-item"
-                        draggable="true"
-                        ondragstart={(e) => handleSingleDayDragStart(e, item)}
-                        ondragend={handleDragEnd}
-                        onclick={(e) => { e.stopPropagation(); onItemClick?.(item); }}
-                      >
-                        <span class="item-dot" style="background-color: {getItemBgColor(item)};"></span>
-                        <span class="item-time">{isTimed(item) && getItemStart(item) ? formatTime(getItemStart(item)!) : ''}</span>
-                        <span class="item-title">{item.title}</span>
-                      </div>
-                    {/each}
-                  {:else}
-                    <!-- 通常時: 単日アイテムのみ表示（上限まで） -->
-                    {#each singleDayItems.slice(0, remainingSlots) as item (item.id)}
-                      <div
-                        class="month-item single-day-item"
-                        class:dragging={draggedItem === item}
-                        draggable="true"
-                        ondragstart={(e) => handleSingleDayDragStart(e, item)}
-                        ondragend={handleDragEnd}
-                        onclick={(e) => { e.stopPropagation(); onItemClick?.(item); }}
-                      >
-                        <span class="item-dot" style="background-color: {getItemBgColor(item)};"></span>
-                        <span class="item-time">{isTimed(item) && getItemStart(item) ? formatTime(getItemStart(item)!) : ''}</span>
-                        <span class="item-title">{item.title}</span>
-                      </div>
-                    {/each}
-                  {/if}
+                  {#each singleDayItems.slice(0, remainingSlots) as item (item.id)}
+                    <div
+                      class="month-item single-day-item"
+                      class:dragging={draggedItem === item}
+                      draggable="true"
+                      ondragstart={(e) => handleSingleDayDragStart(e, item)}
+                      ondragend={handleDragEnd}
+                      onclick={(e) => { e.stopPropagation(); onItemClick?.(item); }}
+                    >
+                      <span class="item-dot" style="background-color: {getItemBgColor(item)};"></span>
+                      <span class="item-time">{isTimed(item) && getItemStart(item) ? formatTime(getItemStart(item)!) : ''}</span>
+                      <span class="item-title">{item.title}</span>
+                    </div>
+                  {/each}
                 </div>
 
-                <!-- resizerボタン: オーバーフロー時に下部に表示 -->
-                {#if overflowCount > 0 || expanded}
-                  <div
-                    class="cell-resizer"
-                    class:expanded={expanded}
-                    onclick={(e) => { e.stopPropagation(); expanded ? handleHideClick(e) : handleMoreClick(e, day); }}
+                <!-- day-expanderボタン: オーバーフロー時に下端に表示 -->
+                {#if overflowCount > 0}
+                  <button
+                    class="day-expander"
+                    class:active={expanded}
+                    onclick={(e) => { toggleExpand(e, day, e.currentTarget.closest('.grid-cell') as HTMLElement); }}
                     title={expanded ? '折りたたむ' : `さらに${overflowCount}件`}
-                  ></div>
+                    aria-label={expanded ? '折りたたむ' : `さらに${overflowCount}件表示`}
+                  >
+                    <span class="expander-arrow">{expanded ? '▲' : '▼'}</span>
+                  </button>
                 {/if}
               </div>
             {/each}
@@ -1132,27 +1168,6 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     background-color: rgba(33, 150, 243, 0.1);
   }
 
-  .grid-cell.expanded {
-    /* 他セルの高さを変えずに前面に展開 */
-    height: var(--grid-cell-height, 120px); /* セル自体の高さは固定のまま */
-    overflow: visible;
-    z-index: 50; /* 他セルより前面 */
-    background-color: white; /* 下のセルを隠す */
-  }
-
-  /* 展開時のday-itemsは高さ制限を解除して全件表示 */
-  .grid-cell.expanded .day-items {
-    overflow: visible;
-    background-color: white;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    border: 1px solid #e0e0e0;
-    border-top: none;
-    border-radius: 0 0 4px 4px;
-    padding: 4px;
-    position: relative;
-    z-index: 50;
-  }
-
   .day-items {
     display: flex;
     flex-direction: column;
@@ -1162,31 +1177,84 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     position: relative;
   }
 
-  /* resizerボタン: grid-cellの下端に配置 */
-  .cell-resizer {
+  /* ===== day-expanderボタン ===== */
+  /* grid-cellの下端に絶対配置。オーバーフロー時に表示される小さなボタン */
+  .day-expander {
     position: absolute;
     bottom: 0;
     left: 0;
     right: 0;
-    height: 6px;
+    height: 4px;
     background-color: #e0e0e0;
+    border: none;
+    padding: 0;
     cursor: s-resize;
     z-index: 51;
-    transition: background-color 0.15s;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    transition: background-color 0.15s, height 0.1s;
     border-radius: 0 0 2px 2px;
+    overflow: visible;
   }
 
-  .cell-resizer:hover {
-    background-color: #2196f3;
+  .day-expander:hover {
+    background-color: #bdbdbd;
+    height: 8px;
   }
 
-  .cell-resizer.expanded {
-    cursor: n-resize;
+  .day-expander.active {
     background-color: #bdbdbd;
   }
 
-  .cell-resizer.expanded:hover {
-    background-color: #2196f3;
+  .day-expander.active:hover {
+    background-color: #9e9e9e;
+  }
+
+  .expander-arrow {
+    font-size: 7px;
+    line-height: 1;
+    color: #666;
+    position: absolute;
+    right: 3px;
+    bottom: 0;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  /* ===== 展開パネル（calendar-content基準の絶対配置） ===== */
+  .expanded-panel-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 99;
+    cursor: default;
+  }
+
+  .expanded-panel {
+    position: absolute;
+    z-index: 100;
+    background-color: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+    padding: 4px 4px 0 4px;
+    min-width: 120px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  /* 展開パネル内の閉じるボタン（パネル底部に配置） */
+  .expanded-panel-close {
+    position: static;
+    width: 100%;
+    margin-top: 2px;
+    border-radius: 0 0 4px 4px;
+    cursor: n-resize;
+  }
+
+  .expanded-panel-close:hover {
+    background-color: #bdbdbd;
   }
 
   .month-item {
