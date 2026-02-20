@@ -553,192 +553,183 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
 
   <!-- カレンダーコンテンツ（スクロール可能） -->
   <div class="calendar-content" class:dragging-active={draggedItem !== null}>
-    <!-- カレンダーテーブル -->
-    <table class="calendar-table">
-    <!-- 曜日ヘッダー -->
-    <thead>
-      <tr class="weekday-header">
-        <th class="weekday">月</th>
-        <th class="weekday">火</th>
-        <th class="weekday">水</th>
-        <th class="weekday">木</th>
-        <th class="weekday">金</th>
-        <th class="weekday">土</th>
-        <th class="weekday">日</th>
-      </tr>
-    </thead>
+
+    <!-- 曜日ヘッダー（固定列グリッド） -->
+    <div class="weekday-header">
+      <div class="weekday">月</div>
+      <div class="weekday">火</div>
+      <div class="weekday">水</div>
+      <div class="weekday">木</div>
+      <div class="weekday">金</div>
+      <div class="weekday">土</div>
+      <div class="weekday">日</div>
+    </div>
 
     <!-- カレンダーボディ -->
-    <tbody class="calendar-body">
+    <div class="calendar-body">
       {#each weeks as week, weekIndex}
         {@const multiDayItemsInWeek = getMultiDayItemsForWeek(week)}
         {@const laneCount = multiDayItemsInWeek.length > 0 ? Math.max(...multiDayItemsInWeek.map(item => item.lane)) + 1 : 0}
-        {@const alldayHeight = laneCount * 24} <!-- 24px per lane -->
-        
-        <!-- Week row: Single <td colspan="7"> containing 3-layer stack -->
-        <tr class="week-row">
-          <td colspan="7">
-            <div class="week-stack" style="--allday-height: {alldayHeight}px">
-              
-              <!-- Layer 1: Week Chrome (date numbers, decorations) -->
-              <div class="week-chrome">
-                {#each week as day, dayIndex}
-                  {@const isToday = day.hasSame(DateTime.now(), 'day')}
-                  {@const isCurrentMonth = day.hasSame(currentDate, 'month')}
-                  <div 
-                    class="chrome-cell"
-                    class:today={isToday}
-                    class:other-month={!isCurrentMonth}
-                  >
-                    <div 
-                      class="day-number"
-                      onclick={(e) => handleDayNumberClick(e, day)}
-                    >
-                      {day.day}
-                    </div>
-                  </div>
-                {/each}
+        {@const alldayHeight = laneCount * 24}
+
+        <!-- Week: single CSS Grid row containing 3-layer stack -->
+        <div class="week-stack" style="--allday-height: {alldayHeight}px; --lane-count: {laneCount}">
+
+          <!-- Layer 1: Week Chrome (date numbers) - grid of 7 -->
+          <div class="week-chrome">
+            {#each week as day}
+              {@const isToday = day.hasSame(DateTime.now(), 'day')}
+              {@const isCurrentMonth = day.hasSame(currentDate, 'month')}
+              <div
+                class="chrome-cell"
+                class:today={isToday}
+                class:other-month={!isCurrentMonth}
+              >
+                <div
+                  class="day-number"
+                  onclick={(e) => handleDayNumberClick(e, day)}
+                >
+                  {day.day}
+                </div>
               </div>
-              
-              <!-- Layer 2: All-Day Canvas (multi-day bars) -->
-              <div class="week-allday">
-                {#each multiDayItemsInWeek as {item, startIndex, span, lane}}
-                  <div 
-                    class="allday-item"
-                    class:dragging={draggedItem === item}
-                    draggable="true"
-                    ondragstart={(e) => handleDragStart(e, item, startIndex, week)}
-                    ondragend={handleDragEnd}
-                    onclick={(e) => { e.stopPropagation(); onItemClick?.(item); }}
-                    style="
-                      --lane: {lane};
-                      --start-index: {startIndex};
-                      --span: {span};
-                      background-color: {getItemBgColor(item)};
-                    "
-                  >
-                    <!-- 左端リサイズハンドル -->
+            {/each}
+          </div>
+
+          <!-- Layer 2: All-Day Canvas (multi-day bars) - absolute positioned inside week-allday -->
+          <div class="week-allday">
+            {#each multiDayItemsInWeek as {item, startIndex, span, lane}}
+              <div
+                class="allday-item"
+                class:dragging={draggedItem === item}
+                draggable="true"
+                ondragstart={(e) => handleDragStart(e, item, startIndex, week)}
+                ondragend={handleDragEnd}
+                onclick={(e) => { e.stopPropagation(); onItemClick?.(item); }}
+                style="
+                  --lane: {lane};
+                  --start-index: {startIndex};
+                  --span: {span};
+                  background-color: {getItemBgColor(item)};
+                "
+              >
+                <!-- 左端リサイズハンドル -->
+                <div
+                  class="resize-handle resize-handle-left"
+                  onmousedown={(e) => handleResizeStart(e, item, 'left')}
+                ></div>
+                <div class="bar-content">{item.title}</div>
+                <!-- 右端リサイズハンドル -->
+                <div
+                  class="resize-handle resize-handle-right"
+                  onmousedown={(e) => handleResizeStart(e, item, 'right')}
+                ></div>
+              </div>
+            {/each}
+          </div>
+
+          <!-- Layer 3: Day Grid (single-day items) - grid of 7 -->
+          <div class="week-grid">
+            {#each week as day}
+              {@const singleDayItems = getItemsForDay(day).filter(item => !isMultiDayItem(item))}
+              {@const dayIndex = week.indexOf(day)}
+              {@const multiDayItemsForThisDay = multiDayItemsInWeek.filter(({startIndex, span}) => dayIndex >= startIndex && dayIndex < startIndex + span)}
+              {@const maxLane = multiDayItemsForThisDay.length > 0 ? Math.max(...multiDayItemsForThisDay.map(item => item.lane)) : -1}
+              {@const multiDayCountForThisDay = maxLane + 1}
+              {@const remainingSlots = Math.max(0, MAX_ITEMS_PER_DAY - multiDayCountForThisDay)}
+              {@const displayedSingleDayCount = Math.min(remainingSlots, singleDayItems.length)}
+              {@const totalDisplayedCount = displayedSingleDayCount + multiDayCountForThisDay}
+              {@const totalItemsCount = singleDayItems.length + multiDayCountForThisDay}
+              {@const overflowCount = totalItemsCount - totalDisplayedCount}
+              {@const expanded = isExpanded(day)}
+
+              <div
+                class="grid-cell"
+                class:expanded={expanded}
+                class:drag-over={dragOverDay?.hasSame(day, 'day')}
+                onclick={(e) => handleCellClick(e, day)}
+                ondragover={(e) => handleDragOver(e, day)}
+                ondrop={(e) => handleDrop(e, day)}
+              >
+                <div class="day-items">
+                  {#if expanded}
+                    <!-- 展開時: 全アイテム（複数日 + 単日）を表示 -->
+                    {@const allDayItemsList = getItemsForDay(day)}
+                    {@const multiDayItemsList = allDayItemsList.filter(item => isMultiDayItem(item))}
+                    {@const singleDayItemsExpanded = allDayItemsList.filter(item => !isMultiDayItem(item))}
+
+                    <!-- 複数日アイテム -->
+                    {#each multiDayItemsList as item (item.id)}
+                      <div
+                        class="month-item multi-day-item-expanded"
+                        draggable="true"
+                        ondragstart={(e) => handleDragStart(e, item)}
+                        ondragend={handleDragEnd}
+                        onclick={(e) => { e.stopPropagation(); onItemClick?.(item); }}
+                      >
+                        <span class="item-dot" style="background-color: {getItemBgColor(item)};"></span>
+                        <span class="item-time">{isTimed(item) && getItemStart(item) ? formatTime(getItemStart(item)!) : ''}</span>
+                        <span class="item-title">{item.title}</span>
+                      </div>
+                    {/each}
+
+                    <!-- 単日アイテム -->
+                    {#each singleDayItemsExpanded as item (item.id)}
+                      <div
+                        class="month-item single-day-item"
+                        draggable="true"
+                        ondragstart={(e) => handleDragStart(e, item)}
+                        ondragend={handleDragEnd}
+                        onclick={(e) => { e.stopPropagation(); onItemClick?.(item); }}
+                      >
+                        <span class="item-dot" style="background-color: {getItemBgColor(item)};"></span>
+                        <span class="item-time">{isTimed(item) && getItemStart(item) ? formatTime(getItemStart(item)!) : ''}</span>
+                        <span class="item-title">{item.title}</span>
+                      </div>
+                    {/each}
+                  {:else}
+                    <!-- 通常時: 単日アイテムのみ表示 -->
+                    {#each singleDayItems.slice(0, remainingSlots) as item (item.id)}
+                      <div
+                        class="month-item single-day-item"
+                        class:dragging={draggedItem === item}
+                        draggable="true"
+                        ondragstart={(e) => handleDragStart(e, item)}
+                        ondragend={handleDragEnd}
+                        onclick={(e) => { e.stopPropagation(); onItemClick?.(item); }}
+                      >
+                        <span class="item-dot" style="background-color: {getItemBgColor(item)};"></span>
+                        <span class="item-time">{isTimed(item) && getItemStart(item) ? formatTime(getItemStart(item)!) : ''}</span>
+                        <span class="item-title">{item.title}</span>
+                      </div>
+                    {/each}
+                  {/if}
+
+                  {#if !expanded && overflowCount > 0}
                     <div
-                      class="resize-handle resize-handle-left"
-                      onmousedown={(e) => handleResizeStart(e, item, 'left')}
-                    ></div>
-                    <div class="bar-content">{item.title}</div>
-                    <!-- 右端リサイズハンドル -->
+                      class="more-items"
+                      onclick={(e) => handleMoreClick(e, day)}
+                    >
+                      +{overflowCount} more
+                    </div>
+                  {/if}
+
+                  {#if expanded}
                     <div
-                      class="resize-handle resize-handle-right"
-                      onmousedown={(e) => handleResizeStart(e, item, 'right')}
-                    ></div>
-                  </div>
-                {/each}
+                      class="hide-items"
+                      onclick={(e) => handleHideClick(e)}
+                    >
+                      hide
+                    </div>
+                  {/if}
+                </div>
               </div>
-              
-              <!-- Layer 3: Day Grid (single-day items) -->
-              <div class="week-grid">
-                {#each week as day}
-                  {@const singleDayItems = getItemsForDay(day).filter(item => !isMultiDayItem(item))}
-                  {@const dayIndex = week.indexOf(day)}
-                  {@const multiDayItemsForThisDay = multiDayItemsInWeek.filter(({startIndex, span}) => dayIndex >= startIndex && dayIndex < startIndex + span)}
-                  {@const maxLane = multiDayItemsForThisDay.length > 0 ? Math.max(...multiDayItemsForThisDay.map(item => item.lane)) : -1}
-                  {@const multiDayCountForThisDay = maxLane + 1}
-                  {@const remainingSlots = Math.max(0, MAX_ITEMS_PER_DAY - multiDayCountForThisDay)}
-                  {@const displayedSingleDayCount = Math.min(remainingSlots, singleDayItems.length)}
-                  {@const totalDisplayedCount = displayedSingleDayCount + multiDayCountForThisDay}
-                  {@const totalItemsCount = singleDayItems.length + multiDayCountForThisDay}
-                  {@const overflowCount = totalItemsCount - totalDisplayedCount}
-                  {@const expanded = isExpanded(day)}
-                  
-                  <div 
-                    class="grid-cell"
-                    class:expanded={expanded}
-                    class:drag-over={dragOverDay?.hasSame(day, 'day')}
-                    onclick={(e) => handleCellClick(e, day)}
-                    ondragover={(e) => handleDragOver(e, day)}
-                    ondrop={(e) => handleDrop(e, day)}
-                  >
-                    <div class="day-items">
-                {#if expanded}
-                  <!-- 展開時: 全アイテム（複数日 + 単日）を表示 -->
-                  {@const allDayItems = getItemsForDay(day)}
-                  {@const multiDayItems = allDayItems.filter(item => isMultiDayItem(item))}
-                  {@const singleDayItemsExpanded = allDayItems.filter(item => !isMultiDayItem(item))}
-                  
-                  <!-- 複数日アイテム -->
-                  {#each multiDayItems as item (item.id)}
-                    <div 
-                      class="month-item multi-day-item-expanded"
-                      draggable="true"
-                      ondragstart={(e) => handleDragStart(e, item)}
-                      ondragend={handleDragEnd}
-                      onclick={(e) => { e.stopPropagation(); onItemClick?.(item); }}
-                    >
-                      <span class="item-dot" style="background-color: {getItemBgColor(item)};"></span>
-                      <span class="item-time">{isTimed(item) && getItemStart(item) ? formatTime(getItemStart(item)!) : ''}</span>
-                      <span class="item-title">{item.title}</span>
-                    </div>
-                  {/each}
-                  
-                  <!-- 単日アイテム -->
-                  {#each singleDayItemsExpanded as item (item.id)}
-                    <div 
-                      class="month-item single-day-item"
-                      draggable="true"
-                      ondragstart={(e) => handleDragStart(e, item)}
-                      ondragend={handleDragEnd}
-                      onclick={(e) => { e.stopPropagation(); onItemClick?.(item); }}
-                    >
-                      <span class="item-dot" style="background-color: {getItemBgColor(item)};"></span>
-                      <span class="item-time">{isTimed(item) && getItemStart(item) ? formatTime(getItemStart(item)!) : ''}</span>
-                      <span class="item-title">{item.title}</span>
-                    </div>
-                  {/each}
-                {:else}
-                  <!-- 通常時: 単日アイテムのみ表示（複数日はoverlay-rowで別途レンダリング） -->
-                  
-                  <!-- 単日アイテム（表示制限あり） -->
-                  {#each singleDayItems.slice(0, remainingSlots) as item (item.id)}
-                    <div 
-                      class="month-item single-day-item"
-                      class:dragging={draggedItem === item}
-                      draggable="true"
-                      ondragstart={(e) => handleDragStart(e, item)}
-                      ondragend={handleDragEnd}
-                      onclick={(e) => { e.stopPropagation(); onItemClick?.(item); }}
-                    >
-                      <span class="item-dot" style="background-color: {getItemBgColor(item)};"></span>
-                      <span class="item-time">{isTimed(item) && getItemStart(item) ? formatTime(getItemStart(item)!) : ''}</span>
-                      <span class="item-title">{item.title}</span>
-                    </div>
-                  {/each}
-                {/if}
-                
-                {#if !expanded && overflowCount > 0}
-                  <div 
-                    class="more-items"
-                    onclick={(e) => handleMoreClick(e, day)}
-                  >
-                    +{overflowCount} more
-                  </div>
-                {/if}
-                
-                      {#if expanded}
-                        <div 
-                          class="hide-items"
-                          onclick={(e) => handleHideClick(e)}
-                        >
-                          hide
-                        </div>
-                      {/if}
-                    </div>
-                  </div>
-                {/each}
-              </div>
-              
-            </div>
-          </td>
-        </tr>
+            {/each}
+          </div>
+
+        </div>
       {/each}
-    </tbody>
-  </table>
+    </div>
+
   </div>
   
 </div>
@@ -823,14 +814,24 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     background-color: #1976d2;
   }
 
-  .calendar-table {
-    width: 100%;
-    table-layout: fixed;
-    border-collapse: separate; /* セル間のオーバーレイを可能にする */
-    border-spacing: 0; /* セル間の隙間を0に */
-    isolation: isolate; /* z-index計算をテーブル内で完結 */
+  /* ===== カレンダーグリッド（CSS Grid統一） ===== */
+
+  /*
+   * 列ずれ防止の核心:
+   * weekday-header / week-chrome / week-allday / week-grid の全てが
+   * 同一の --col-widths を参照し、列幅を完全に同期する。
+   * <table> は列幅の計算が各行独立なので廃止した。
+   */
+
+  /* 7列グリッドのテンプレート（共通定義） */
+  .weekday-header,
+  .week-chrome,
+  .week-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
   }
 
+  /* 曜日ヘッダー */
   .weekday-header {
     border-bottom: 1px solid #e0e0e0;
   }
@@ -842,40 +843,42 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     font-size: 14px;
     color: #666;
     border: 1px solid #e0e0e0;
+    box-sizing: border-box;
   }
 
+  /* カレンダーボディ：週ごとのブロック */
   .calendar-body {
-  }
-
-  .week-row {
-  }
-
-  .week-row > td {
-    padding: 0;
-    border: none;
-  }
-
-  /* Week Stack: 3-layer container */
-  .week-stack {
-    position: relative;
     display: flex;
     flex-direction: column;
   }
 
-  /* Layer 1: Week Chrome (date numbers, decorations) */
+  /* ===== Week Stack: 3層を縦に積む ===== */
+  .week-stack {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    /* allday層の高さをCSS変数で管理 */
+  }
+
+  /* ===== Layer 1: Week Chrome (日付番号) ===== */
   .week-chrome {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
     position: relative;
     z-index: 3;
-    pointer-events: none; /* must not block interactions */
+    pointer-events: none; /* クリックを下層に透過 */
   }
 
   .chrome-cell {
     border: 1px solid #e0e0e0;
+    border-top: none;
     padding: 4px;
     min-height: 30px;
+    box-sizing: border-box;
     position: relative;
+  }
+
+  /* 先頭週の上ボーダーを出す */
+  .week-stack:first-child .chrome-cell {
+    border-top: 1px solid #e0e0e0;
   }
 
   .chrome-cell.today {
@@ -887,7 +890,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
   }
 
   .chrome-cell .day-number {
-    pointer-events: auto; /* Allow clicks on day number */
+    pointer-events: auto;
     cursor: pointer;
     display: inline-block;
     padding: 4px 8px;
@@ -909,24 +912,32 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     color: #999;
   }
 
-  /* Layer 2: All-Day Canvas (multi-day bars) */
+  /* ===== Layer 2: All-Day Canvas (複数日バー) ===== */
+  /*
+   * week-alldayはchrome層のすぐ下に来る。
+   * allday-itemは週全体を基準に絶対配置する。
+   * 高さは laneCount * 24px。laneが0なら高さ0で消える。
+   */
   .week-allday {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
     position: relative;
     z-index: 2;
-    height: var(--allday-height);
-    margin-top: -30px; /* Overlap with chrome layer */
-    padding-top: 30px; /* Reserve space for date numbers */
+    height: var(--allday-height, 0px);
+    /* 幅はweek-stackに合わせてfull width */
+    width: 100%;
+    overflow: visible;
+    pointer-events: none; /* 子要素(allday-item)のみイベントを受ける */
   }
 
   .allday-item {
     position: absolute;
-    top: calc(30px + var(--lane) * 24px); /* 30px offset for date numbers + lane spacing */
-    left: calc(var(--start-index) * (100% / 7));
-    width: calc(var(--span) * (100% / 7));
+    /* topはlane番号 × 1行高さ(24px) */
+    top: calc(var(--lane) * 24px);
+    /* leftは開始インデックス × セル幅(1/7) */
+    left: calc(var(--start-index) / 7 * 100%);
+    /* widthはspan × セル幅(1/7) */
+    width: calc(var(--span) / 7 * 100%);
     height: 22px;
-    padding: 0 4px;
+    padding: 0;
     font-size: 11px;
     border-radius: 3px;
     color: #333;
@@ -936,6 +947,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     display: flex;
     align-items: center;
     pointer-events: auto;
+    box-sizing: border-box;
   }
 
   .allday-item:hover {
@@ -960,6 +972,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     z-index: 10;
     background-color: transparent;
     transition: background-color 0.15s;
+    flex-shrink: 0;
   }
 
   .resize-handle:hover {
@@ -987,21 +1000,25 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     align-items: center;
   }
 
-  /* Layer 3: Day Grid (single-day items) */
+  /* ===== Layer 3: Day Grid (単日アイテム) ===== */
+  /*
+   * week-gridはallday層のすぐ下に来る。
+   * 各grid-cellの上部にallday-heightぶんのpaddingを入れることで
+   * alldayバーがgrid-cellの内容に被らないようにする。
+   */
   .week-grid {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
     position: relative;
     z-index: 1;
   }
 
   .grid-cell {
     border: 1px solid #e0e0e0;
-    border-top: none; /* Already has border from chrome layer */
+    border-top: none;
     padding: 4px;
     min-height: 120px;
     cursor: pointer;
     position: relative;
+    box-sizing: border-box;
   }
 
   .grid-cell:hover {
@@ -1014,11 +1031,6 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
 
   .grid-cell.expanded {
     min-height: auto;
-  }
-
-  .day-number:hover {
-    background-color: rgba(33, 150, 243, 0.1);
-    color: #2196f3;
   }
 
   .day-items {

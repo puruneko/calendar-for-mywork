@@ -5,7 +5,7 @@ test.describe('MonthView - 複数日アイテムのリサイズ', () => {
     await page.goto('http://localhost:5176');
     // 月表示に切り替え
     await page.click('button:has-text("月表示")');
-    await page.waitForSelector('.calendar-table');
+    await page.waitForSelector('.week-stack');
   });
 
   test('複数日バーにリサイズハンドルが表示されること', async ({ page }) => {
