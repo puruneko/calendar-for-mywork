@@ -182,10 +182,29 @@ function toggleExpand(event: MouseEvent, day: DateTime, cellEl: HTMLElement, hid
   const cellRect = cellEl.getBoundingClientRect();
   const scrollTop = calendarContentEl.scrollTop;
 
-  // パネルはgrid-cellの真下にピッタリ配置
+  // パネルのtop: 最後に表示されているsingle-day-itemのbottom基準
+  // → アイテム間隔(gap: 2px)がそのまま続くように見せ、「セルが延長された」錯覚を与える
+  const dayItemEls = cellEl.querySelectorAll('.single-day-item');
+  let top: number;
+  if (dayItemEls.length > 0) {
+    const lastItemRect = dayItemEls[dayItemEls.length - 1].getBoundingClientRect();
+    // gap: 2px 分を足してアイテム間隔を揃える
+    top = lastItemRect.bottom + 2 - contentRect.top + scrollTop;
+  } else {
+    // アイテムなし（all-dayアイテムのみでremainingSlots=0等）: chrome-cellの底辺を基準
+    const chromeCellEl = cellEl.closest('.week-stack')?.querySelector('.week-chrome')?.children[
+      Array.from(cellEl.parentElement?.children ?? []).indexOf(cellEl)
+    ] as HTMLElement | undefined;
+    if (chromeCellEl) {
+      const chromeRect = chromeCellEl.getBoundingClientRect();
+      top = chromeRect.bottom + 2 - contentRect.top + scrollTop;
+    } else {
+      top = cellRect.top + 32 - contentRect.top + scrollTop; // フォールバック
+    }
+  }
+
   // left・widthはgrid-cellに完全一致（セルが延長されたように見せる）
   const left = cellRect.left - contentRect.left;
-  const top = cellRect.bottom - contentRect.top + scrollTop; // grid-cellの下端
   const width = cellRect.width;
 
   expandedPanelStyle = `left: ${left}px; top: ${top}px; width: ${width}px;`;
@@ -727,9 +746,15 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
           <!-- week-alldayは完全透明。縦罫線はallday-grid-linesで描画 -->
           <div class="week-allday">
             <!-- 縦罫線用の透明グリッド（week-gridと同じ列幅） -->
-            <div class="allday-grid-lines" aria-hidden="true">
+            <!-- allday-grid-line-cellがDnDドロップ先を担当（allday-item不在セルへのDnD対応） -->
+            <div class="allday-grid-lines">
               {#each week as _, i}
-                <div class="allday-grid-line-cell" class:first={i === 0}></div>
+                <div
+                  class="allday-grid-line-cell"
+                  class:first={i === 0}
+                  ondragover={(e) => handleDragOver(e, week[i])}
+                  ondrop={(e) => handleDrop(e, week[i])}
+                ></div>
               {/each}
             </div>
             {#each multiDayItemsInWeek as {item, startIndex, span, lane}}
@@ -804,16 +829,15 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
                   {/each}
                 </div>
 
-                <!-- day-expanderボタン: オーバーフロー時に下端に表示 -->
-                {#if overflowCount > 0}
+                <!-- day-expanderボタン(open用): オーバーフロー時に下端に表示。展開中は非表示 -->
+                {#if overflowCount > 0 && !expanded}
                   <button
                     class="day-expander"
-                    class:active={expanded}
                     onclick={(e) => { toggleExpand(e, day, e.currentTarget.closest('.grid-cell') as HTMLElement, hiddenItems); }}
-                    title={expanded ? '折りたたむ' : `さらに${overflowCount}件`}
-                    aria-label={expanded ? '折りたたむ' : `さらに${overflowCount}件表示`}
+                    title={`さらに${overflowCount}件`}
+                    aria-label={`さらに${overflowCount}件表示`}
                   >
-                    <span class="expander-arrow">{expanded ? '▲' : '▼'}</span>
+                    <span class="expander-arrow">▼</span>
                   </button>
                 {/if}
               </div>
@@ -857,6 +881,11 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
   }
   
   .calendar-content.dragging-active .month-item:not(.dragging) {
+    pointer-events: none;
+  }
+
+  /* ドラッグ中はオーバーレイを透過させてドロップ先のcellにイベントを届ける */
+  .calendar-content.dragging-active .expanded-panel-overlay {
     pointer-events: none;
   }
 
@@ -1054,6 +1083,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     border-left: 1px solid #e0e0e0;
     height: 100%;
     box-sizing: border-box;
+    pointer-events: auto; /* allday領域の空白セルへのDnDドロップを受け取る */
   }
 
   .allday-grid-line-cell.first {
@@ -1178,8 +1208,8 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     bottom: 0;
     left: 0;
     right: 0;
-    height: 4px;
-    background-color: #e0e0e0;
+    height: 8px;
+    background-color: #f0f0f0;
     border: none;
     padding: 0;
     cursor: s-resize;
@@ -1187,22 +1217,13 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     display: flex;
     align-items: flex-end;
     justify-content: flex-end;
-    transition: background-color 0.15s, height 0.1s;
+    transition: background-color 0.15s;
     border-radius: 0 0 2px 2px;
     overflow: visible;
   }
 
   .day-expander:hover {
     background-color: #bdbdbd;
-    height: 8px;
-  }
-
-  .day-expander.active {
-    background-color: #bdbdbd;
-  }
-
-  .day-expander.active:hover {
-    background-color: #9e9e9e;
   }
 
   .expander-arrow {
@@ -1239,13 +1260,14 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     border-right: 1px solid #e0e0e0;
     border-bottom: 1px solid #e0e0e0;
     border-top: none;
-    /* grid-cellと同じパディング */
-    padding: 4px 4px 0 4px;
+    /* 上部のpadding/margin/borderを0にして最後のitemと隙間なく繋げる */
+    padding: 0 4px 0 4px;
+    margin-top: 0;
     display: flex;
     flex-direction: column;
     gap: 2px;
-    /* 左右・下のみ影（上はgrid-cellと連続しているので影なし） */
-    box-shadow: -2px 4px 8px rgba(0,0,0,0.12), 2px 4px 8px rgba(0,0,0,0.12), 0 4px 8px rgba(0,0,0,0.12);
+    /* grid-cellと同じスタイル: 影なし */
+    box-shadow: none;
     box-sizing: border-box;
   }
 

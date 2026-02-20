@@ -1,242 +1,211 @@
-# MonthView リファクタリング実装プラン
+# MonthView 改善計画 Phase 6
 
-**最終更新**: 2026-02-20  
-**対象**: MonthView のみ（WeekView は変更対象外）  
-**基準仕様**: documents/prompt/for_fat_prompt.txt
+最終更新: 2026-02-20
 
 ---
 
-## 全体方針
+## 背景
 
-現在のMonthViewは、複数日アイテムを`multi-day-overlay-row`という別行で絶対位置指定して表示していますが、for_fat_promptが要求する**3層独立レイアウト構造**には準拠していません。また、レーン配置アルゴリズムも仕様の要求を完全には満たしていません。
-
-そのため、**構造の全面的な見直し**が必要です。既存のテストで合格している部分も、構造変更により影響を受ける可能性があるため、各フェーズで徹底的にテストを行い、段階的に確実性を高めていきます。
-
----
-
-## フェーズ分割と実装方針
-
-### Phase 1: レーン配置アルゴリズムの実装と単体テスト（Logic Layer）
-
-**目的**: UI構造に依存しない、純粋な関数としてレーン配置ロジックを実装する
-
-**実装内容**:
-- `dateUtils.ts`に`diffDaysISO(a: string, b: string): number`関数を追加
-  - UTC midnightで厳密な日数差分を計算
-  - Luxonを使わず、Date APIで実装（タイムゾーン影響を排除）
-- `itemUtils.ts`（または新規ファイル`laneLayoutAlgorithm.ts`）に`layoutWeekAllDay(context: WeekContext): LaneLayout`関数を実装
-  - 入力: 週の開始日・終了日（ISO文字列）、AllDayアイテムのリスト
-  - 正規化: アイテムを0-6のインデックス空間に変換（週の範囲でクランプ）
-  - ソート: startIndex ASC → span DESC → id ASC（決定論的）
-  - レーン割り当て: 仕様通りの貪欲アルゴリズム（既存レーンで配置可能か順次チェック）
-  - 出力: `{ laneCount, placements: [{ id, lane, startIndex, span }] }`
-
-**テスト観点**:
-- **正確性テスト（unit tests）**:
-  - 仕様の例（A: 16-20, B: 17-19, C: 19-21）が正しくレーン0, 1, 1に配置されるか
-  - 単一日アイテム（endDateがundefined）が正しくspan=1として処理されるか
-  - 週をまたぐアイテムが正しくクランプされるか（週の範囲外は切り捨て）
-  - 空のアイテムリストでlaneCount=0が返るか
-  
-- **決定論性テスト**:
-  - 同じ入力で複数回呼び出しても同一の出力が得られるか
-  - アイテムの入力順序を変えても、ソート後は同じレイアウトになるか
-  
-- **境界値テスト**:
-  - 週の開始日ぴったりに始まるアイテム
-  - 週の終了日ぴったりに終わるアイテム
-  - 週全体をカバーするアイテム（span=7）
-
-**完了判定**: 上記の単体テストが全てパスし、アルゴリズムが純粋関数として独立して動作すること
-
-**コミット**: "Phase 1: Implement deterministic lane layout algorithm with unit tests"
+MonthViewは2026-02-20のPhase 2〜5の大規模リファクタリングで3層CSS Grid構造が完成した。
+Phase 6では、ユーザー指示による細部UI改善と、コード分析で発見した既存課題を解消する。
 
 ---
 
-### Phase 2: MonthViewの構造リファクタリング（UI Structure）
+## タスク一覧
 
-**目的**: 週行を3層構造に変更し、CSS Gridによる列整列を実現する
-
-**実装内容**:
-- MonthViewのマークアップを全面変更
-  - 現在の`<tr class="week-row">`を`<tr><td colspan="7"><div class="week-stack">...</div></td></tr>`に変更
-  - `week-stack`内に3つのレイヤーを配置:
-    1. `.week-chrome`: 日付番号、today/other-monthの背景装飾（pointer-events: none）
-    2. `.week-allday`: 複数日アイテムのバー（絶対位置）
-    3. `.week-grid`: 単日アイテムのグリッド
-  - 各レイヤーに`grid-template-columns: repeat(7, 1fr)`を適用
-  
-- CSSの調整
-  - `.week-chrome`, `.week-allday`, `.week-grid`がグリッド定義を共有
-  - `.week-allday`の高さは`var(--allday-height)`で動的に制御
-  - multi-day barは絶対位置で`left: calc(startIndex * (100% / 7))`、`width: calc(span * (100% / 7))`を使用
-
-- ロジックの統合
-  - Phase 1で実装した`layoutWeekAllDay`を呼び出し、各週ごとにレーン配置を取得
-  - レーン数に応じて`--allday-height`を計算・設定（例: `laneCount * 24px`）
-
-**テスト観点**:
-- **構造テスト（E2E）**:
-  - 各週が`week-stack`を持ち、その中に3つのレイヤーが存在するか（DOM構造検証）
-  - 各レイヤーが7列のグリッドを持つか（computed styleで確認）
-  - 複数日アイテムが`.week-allday`内に配置され、単日アイテムが`.week-grid`内に配置されているか
-  
-- **視覚テスト**:
-  - 日付番号が正しく表示されているか
-  - 複数日アイテムが日セルに切り取られず、連続したバーとして表示されるか
-  - 単日アイテムが複数日アイテムの下に適切な間隔で表示されるか
-  
-- **非回帰テスト**:
-  - 既存のmonth-view.spec.tsのテストが引き続きパスするか（表示内容は同じであるべき）
-  - ホバー、クリック、DnDなどのインタラクションが正しく動作するか
-
-**完了判定**: 構造が3層に変更され、レイアウトが視覚的に正しく表示されること。既存のE2Eテストが全てパスすること
-
-**コミット**: "Phase 2: Refactor MonthView to 3-layer week structure with CSS Grid alignment"
+| ID | 区分 | タイトル | 優先度 | 状態 |
+|---|---|---|---|---|
+| 6-1 | UI | day-expander の通常時スタイル変更（8px・薄色） | 高 | 未着手 |
+| 6-2 | UI | expanded-panel の「セル延長錯覚」改善 | 高 | 未着手 |
+| 6-3 | 品質 | handleDragStartContinuous デッドコード削除 | 中 | 未着手 |
+| 6-4 | 品質 | getPreviewStartIndex / getPreviewSpan デッドコード削除 | 中 | 未着手 |
+| 6-5 | DnD | ドラッグプレビュー（ゴーストバー）の実装 | 中 | 未着手 |
+| 6-6 | DnD | allday-item ↔ grid-cell クロスDnD 動作確認・修正 | 低 | 未着手 |
 
 ---
 
-### Phase 3: 複数日アイテムの配置精度向上とインタラクション修正
+## Task 6-1: day-expander の通常時スタイル変更
 
-**目的**: 複数日バーの位置が仕様通り正確に計算され、ユーザーインタラクションが正常に動作することを保証
+### 仕様
 
-**実装内容**:
-- Phase 1のアルゴリズム出力を使って、各バーに正確なCSS変数を設定
-  - `style="--lane: {lane}; --start-index: {startIndex}; --span: {span}"`
-  - CSS側で`top: calc(var(--lane) * 24px)`、`left: calc(var(--start-index) * (100% / 7))`など
-  
-- インタラクションの調整
-  - 複数日バーのクリック、ドラッグ&ドロップが正しく動作するか検証
-  - pointer-eventsの設定が適切か（chromeレイヤーはnone、alldayとgridはauto）
-  - 日付番号クリックでWeekViewに遷移する機能が正常に動作するか
+- **通常時**: `height: 8px`、背景色を現在の `#e0e0e0` より薄い `#f0f0f0` に変更
+- **hover時**: 現状維持（`height: 8px`、`background-color: #bdbdbd`）
+  - 通常時が8pxになるため、hoverでの高さ変化アニメーションは廃止
+- **active時（展開済み）**: 現状維持
 
-**テスト観点**:
-- **配置精度テスト（E2E + Visual）**:
-  - 3日間のアイテムが正確に3カラム分の幅で表示されるか
-  - 複数の複数日アイテムが重ならず、異なるレーンに配置されているか
-  - レーン数に応じて`.week-allday`の高さが動的に変化しているか
-  
-- **インタラクションテスト**:
-  - 複数日バーをクリックしてonItemClickが発火するか
-  - 複数日バーをドラッグして移動できるか
-  - 日付番号をクリックしてWeekViewに遷移できるか（既存機能の維持）
-  
-- **受け入れ基準検証**:
-  - 複数日バーが日セルでクリップされないか
-  - 隣接する日のホバーが複数日レンダリングに影響しないか
-  - 単日アイテムを全て削除しても複数日レイアウトが変化しないか
-  - 再レンダリングしてもレイアウトが同一であるか（決定論性）
-  - DOMにspacer要素が存在しないか
+### 変更箇所
 
-**完了判定**: for_fat_promptのAcceptance Criteriaが全て満たされること
+`src/lib/components/MonthView.svelte` の `.day-expander` CSS:
 
-**コミット**: "Phase 3: Implement precise multi-day bar positioning and verify interactions"
+```css
+/* 変更前 */
+.day-expander {
+  height: 4px;
+  background-color: #e0e0e0;
+  ...
+}
+.day-expander:hover {
+  background-color: #bdbdbd;
+  height: 8px;
+}
 
----
+/* 変更後 */
+.day-expander {
+  height: 8px;                /* 4px → 8px */
+  background-color: #f0f0f0;  /* #e0e0e0 → #f0f0f0（薄く） */
+  ...
+}
+.day-expander:hover {
+  background-color: #bdbdbd;
+  /* height は通常時と同じ8pxのため削除 */
+}
+```
 
-### Phase 4: +N more展開機能の調整とエッジケース対応
+### テスト方針
 
-**目的**: 新しい構造で+N more機能が正しく動作し、エッジケースが適切に処理されることを保証
-
-**実装内容**:
-- 展開時のレンダリング調整
-  - セルを展開した際、複数日アイテムと単日アイテムの両方が適切に表示されるか
-  - 展開時は`.week-grid`内の該当セルが拡大し、全アイテムが表示される
-  
-- エッジケースの処理
-  - 1週間に複数日アイテムが多数ある場合（10個以上など）
-  - レーン数が極端に多い場合の高さ制御
-  - 月の境界をまたぐアイテムの表示
-
-**テスト観点**:
-- **展開機能テスト（E2E）**:
-  - +N moreをクリックしてセルが展開されるか
-  - 展開時に全アイテムが表示されるか（複数日+単日）
-  - hideをクリックして折りたたまれるか
-  
-- **エッジケーステスト**:
-  - 複数日アイテムが10個以上ある週で正しくレーン配置されるか
-  - 月の最初/最後の週で、前月/翌月にまたがるアイテムが正しくクランプされるか
-  - アイテムが0個の週で正常に表示されるか
-
-**完了判定**: 全ての既存E2Eテストがパスし、エッジケースでもエラーが発生しないこと
-
-**コミット**: "Phase 4: Adjust +N more expansion and handle edge cases"
+- 既存のE2Eテスト（`month-view.spec.ts`の展開パネル関連）が引き続きパスすること
+- CSS数値の変更のみなので新規テスト追加は不要
+- `month-view.spec.ts` のセレクタが `.day-expander` を使っている場合は影響を確認する
 
 ---
 
-### Phase 5: パフォーマンス検証と最終調整
+## Task 6-2: expanded-panel の「セル延長錯覚」改善
 
-**目的**: 大量データでの動作を確認し、全体の品質を保証
+### 問題の詳細分析
 
-**実装内容**:
-- パフォーマンステスト用のデータ生成
-  - 1,000個のアイテムを含むテストケースを作成
-  - アルゴリズムの実行時間が許容範囲内か測定（O(n log n)）
-  
-- 最終的なコードレビューとリファクタリング
-  - 不要なコメント、console.logの削除
-  - 変数名の統一、型定義の整理
-  - CSSの重複排除、クラス名の整理
+現在、`expanded-panel` の `top` はgrid-cellの `bottom` に設定されているが、
+`.expanded-panel` の CSS に `padding: 4px 4px 0 4px;` があるため、
+パネル内の最初のアイテムが grid-cell 内の最後のアイテムより `4px` 下にずれている。
 
-**テスト観点**:
-- **パフォーマンステスト**:
-  - 1,000個のアイテムで`layoutWeekAllDay`が1秒以内に完了するか
-  - レンダリングが遅延なく行われるか
-  
-- **全体回帰テスト**:
-  - 全てのunit tests、E2E testsを再実行
-  - 手動で各機能を操作し、異常がないか確認
+結果として、grid-cell と expanded-panel の間に視覚的な隙間が生じており、
+「セルが延長された」ように見えない。
 
-**完了判定**: 全テストがパスし、パフォーマンスが要求を満たすこと
+### 解決策の検討
 
-**コミット**: "Phase 5: Performance validation and final adjustments"
+#### アプローチA: `padding-top: 0` にする（最小変更）
+
+```css
+.expanded-panel {
+  padding: 0 4px 0 4px;  /* padding-topを4px→0に */
+}
+```
+
+**メリット**: 最小変更で隙間解消。  
+**デメリット**: パネル内の最初のアイテムがgrid-cellの内枠に直接くっつく。
+ただし `gap: 2px` は残るため、grid-cell内の最後のアイテムとの間隔は
+`grid-cell の padding-bottom(0) + panel の padding-top(0) + gap(2px)` = 2px となり、
+grid-cell 内のアイテム間隔（`gap: 2px`）と完全に一致する。
+
+#### アプローチB: border-top を追加して境界を明示する
+
+grid-cell 最下端とパネル先頭の見た目上の連続性は、実際にはborderで分かれているため、
+視覚的につながって見えるかどうかはブラウザのレンダリングに依存する可能性がある。
+
+**採用しない理由**: 要件は「境界を隠す」ことなのでborderは増やしたくない。
+
+#### 採用: アプローチA
+
+`padding-top: 0` にすることで：
+- パネル内アイテムの先頭が grid-cell の最後のアイテムと `gap: 2px` の間隔で並ぶ
+- これは grid-cell 内のアイテム間の間隔と同一
+- ユーザーには「同じリストが続いている」ように見える
+
+**実装可能と判断**。
+
+### 変更箇所
+
+`src/lib/components/MonthView.svelte` の `.expanded-panel` CSS:
+
+```css
+/* 変更前 */
+.expanded-panel {
+  padding: 4px 4px 0 4px;
+  ...
+}
+
+/* 変更後 */
+.expanded-panel {
+  padding: 0 4px 0 4px;   /* padding-topを4px→0 */
+  ...
+}
+```
+
+### テスト方針
+
+- CSS変更のみ。既存E2Eテストがパスすることを確認する
+- 新規テスト追加は不要
 
 ---
 
-## 各フェーズのテスト戦略まとめ
+## Task 6-3: handleDragStartContinuous デッドコード削除
 
-| Phase | テストレベル | 主な観点 |
-|-------|------------|---------|
-| 1 | Unit Tests | アルゴリズムの正確性、決定論性、境界値 |
-| 2 | E2E Tests | DOM構造、視覚的レイアウト、既存機能の非回帰 |
-| 3 | E2E + Visual | 配置精度、インタラクション、受け入れ基準 |
-| 4 | E2E | 展開機能、エッジケース、堅牢性 |
-| 5 | Performance + Regression | 大量データ、全体品質 |
+### 問題
+
+`handleDragStartContinuous` 関数（300行目付近）が定義されているが、
+テンプレート内のどこからも呼ばれていない。
+allday-itemのDnDは `handleDragStart` のみ使用されている。
+
+### 変更箇所
+
+`src/lib/components/MonthView.svelte` の `handleDragStartContinuous` 関数を丸ごと削除（約54行）。
+
+### テスト方針
+
+- 削除後、全テストがパスすることを確認する（デッドコード削除なので動作変化なし）
 
 ---
 
-## リスク管理
+## Task 6-4: getPreviewStartIndex / getPreviewSpan デッドコード削除
 
-- **既存機能への影響**: Phase 2以降、構造が大きく変わるため、既存のE2Eテストが失敗する可能性があります。各フェーズでテストを修正し、機能が正しく維持されていることを確認します。
-- **WeekViewとの整合性**: WeekViewは変更対象外ですが、共通のユーティリティ関数（`dateUtils`, `itemUtils`）を使用しています。Phase 1での関数追加がWeekViewに影響しないことを確認します。
+### 問題
+
+`getPreviewStartIndex` / `getPreviewSpan` 関数が定義されているが、
+テンプレート内のどこからも呼ばれていない（ドラッグプレビュー実装の準備コードとして残存）。
+
+### 変更方針
+
+Task 6-5（ドラッグプレビュー実装）でこれらを使う可能性がある。
+そのため、6-5の着手前に状況を再評価する。
+
+- **6-5を実装しない場合**: 削除する
+- **6-5を実装する場合**: 6-5の中で活用する
 
 ---
 
-## 実装状態トラッキング
+## Task 6-5: ドラッグプレビュー（ゴーストバー）実装
 
-- [x] Phase 1: レーン配置アルゴリズムの実装と単体テスト ✅ (Commit: 9dd97dd)
-- [x] Phase 2: MonthViewの構造リファクタリング ✅ (Commit: 9218637)
-  - テストを新3層構造クラス名（.grid-cell, .allday-item, .chrome-cell等）に更新
-  - MonthViewにリサイズハンドル（.resize-handle-left/.resize-handle-right）を追加
-  - 旧CSSクラス（.day-cell, .multi-day-bar等）を完全削除
-  - overlay-hit-test.spec.ts、month-view-resize.spec.tsを全面書き直し
-  - custom-style.spec.tsの日付依存テストを修正
-- [x] Phase 3: 複数日アイテムの配置精度向上とインタラクション修正 ✅ (Phase 2に統合)
-  - CSS変数（--lane, --start-index, --span）による正確な絶対位置配置を実装済み
-  - DnD・リサイズのクラス参照を.allday-itemに統一
-  - pointer-events設定（chrome: none, allday/grid: auto）適切に設定済み
-- [x] Phase 4: +N more展開機能の調整とエッジケース対応 ✅ (Phase 2に統合)
-  - .grid-cell.expandedクラスで展開状態を管理
-  - 展開時にmulti-day-item-expanded + single-day-itemの両方を表示
-- [x] Phase 5: パフォーマンス検証と最終調整 ✅ (Phase 1に実装済み)
-  - 100アイテムを100ms以内で処理する単体テスト実装済み
-  - 全テスト: 単体58件 + E2E 73件パス（2スキップ）
+### 概要
+
+allday-item のドラッグ中に、ドロップ先週のどこにバーが移動するかをゴーストバー（半透明バー）で表示する。
+
+### 実装方針
+
+1. `getPreviewStartIndex` / `getPreviewSpan`（Task 6-4で保留中）を活用
+2. 各週の `multiDayItemsInWeek` の計算ループ内で、ドラッグ中かつ `dragOverDay` が設定されている場合にプレビューを計算
+3. `.allday-item.preview` クラスを追加し、`opacity: 0.4`、`pointer-events: none`、`border: 1px dashed` で表示
+
+### テスト方針
+
+- E2Eテストポリシーの制約（`page.mouse.*` API必須）に従い、ドラッグ操作後のプレビュー表示を検証
+- ただし、ゴーストバーの位置・色等のビジュアル詳細は検証しない（TESTING_POLICYの禁止事項）
+
+---
+
+## Task 6-6: allday-item ↔ grid-cell クロスDnD 動作確認
+
+### 調査内容
+
+現在の `handleDrop` では、`isMultiDayItem(draggedItem)` で判定して処理を分岐している。
+- allday-item → grid-cell へドロップ: 複数日アイテムを単一日にドロップした場合の挙動確認
+- grid-cell → allday-item へドロップ: 現状では発生しない（allday層はpointer-events: none）
+
+### 方針
+
+このタスクは動作確認のみとし、問題があれば別フェーズで対応する。
 
 ---
 
 ## 変更履歴
 
-- 2026-02-20: 初版作成
-- 2026-02-20: Phase 1完了 - レーン配置アルゴリズム実装、全58単体テスト合格
-- 2026-02-20: Phase 2-5完了 - MonthView 3層構造リファクタリング、テスト全面更新、全フェーズ完了
+- 2026-02-20: 初版作成（Phase 1〜5完了後の改善計画）
+- 2026-02-20: Phase 6 計画を記載（ユーザー指示 + コード分析による課題）
