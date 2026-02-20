@@ -29,10 +29,31 @@ let {
 let expandedDay: DateTime | null = $state(null);
 // 展開パネルの位置・サイズ（calendar-content基準の絶対座標）
 let expandedPanelStyle: string = $state('');
-// 展開パネルに表示するアイテム（隠れていたItemのみ）
-let expandedHiddenItems: CalendarItem[] = $state([]);
 // calendar-contentのDOM参照
 let calendarContentEl: HTMLElement | null = $state(null);
+
+// 展開パネルに表示するアイテム（隠れていたItemのみ）
+// items や expandedDay が変わると自動再計算されるので、移動後も表示が更新される
+let expandedHiddenItems = $derived.by(() => {
+  if (!expandedDay) return [];
+  // expandedDay の週を特定
+  const targetWeek = weeks.find(week => week.some(d => d.hasSame(expandedDay!, 'day')));
+  if (!targetWeek) return [];
+  const dayIndex = targetWeek.findIndex(d => d.hasSame(expandedDay!, 'day'));
+  // その日の複数日アイテム数（allday層で使用されるlane数）を計算
+  const multiDayItemsInWeek = getMultiDayItemsForWeek(targetWeek);
+  const multiDayItemsForThisDay = multiDayItemsInWeek.filter(
+    ({ startIndex, span }) => dayIndex >= startIndex && dayIndex < startIndex + span
+  );
+  const maxLane = multiDayItemsForThisDay.length > 0
+    ? Math.max(...multiDayItemsForThisDay.map(item => item.lane))
+    : -1;
+  const multiDayCountForThisDay = maxLane + 1;
+  const remainingSlots = Math.max(0, MAX_ITEMS_PER_DAY - multiDayCountForThisDay);
+  // expandedDay の単日アイテムのうち上限を超えた分を返す
+  const singleDayItems = items.filter(item => itemContainsDay(item, expandedDay!) && !isMultiDayItem(item));
+  return singleDayItems.slice(remainingSlots);
+});
 
 // DnD状態
 let draggedItem = $state<CalendarItem | null>(null);
@@ -172,7 +193,6 @@ function toggleExpand(event: MouseEvent, day: DateTime, cellEl: HTMLElement, hid
   if (isExpanded(day)) {
     expandedDay = null;
     expandedPanelStyle = '';
-    expandedHiddenItems = [];
     return;
   }
 
@@ -209,12 +229,17 @@ function toggleExpand(event: MouseEvent, day: DateTime, cellEl: HTMLElement, hid
 
   expandedPanelStyle = `left: ${left}px; top: ${top}px; width: ${width}px;`;
   expandedDay = day;
-  expandedHiddenItems = hiddenItems;
 }
 
 // 展開パネル外クリックで閉じる
 function handlePanelOutsideClick(event: MouseEvent) {
   event.stopPropagation();
+  expandedDay = null;
+  expandedPanelStyle = '';
+}
+
+// 展開パネルを閉じる
+function closeExpandedPanel() {
   expandedDay = null;
   expandedPanelStyle = '';
 }
@@ -701,7 +726,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
         <!-- 閉じるボタン（▲）: パネル底端に配置 -->
         <button
           class="day-expander expanded-panel-close"
-          onclick={(e) => { e.stopPropagation(); expandedDay = null; expandedPanelStyle = ''; expandedHiddenItems = []; }}
+          onclick={(e) => { e.stopPropagation(); closeExpandedPanel(); }}
           title="折りたたむ"
           aria-label="折りたたむ"
         >
@@ -1312,6 +1337,11 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
 
   .month-item:active {
     cursor: grabbing;
+  }
+
+  /* ドラッグ中の単日Itemをgrid-cellから非表示にして下のItemを詰める */
+  .single-day-item.dragging {
+    display: none;
   }
 
 
