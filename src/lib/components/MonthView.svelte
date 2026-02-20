@@ -202,13 +202,16 @@ function recalculatePanelPosition() {
 
   // パネルのtop: 最後に表示されているsingle-day-itemのbottom基準
   // → アイテム間隔(gap: 2px)がそのまま続くように見せ、「セルが延長された」錯覚を与える
-  // ただしgrid-cellはoverflow:hiddenのため、lastItemがcellの外にはみ出す場合は
-  // cellRect.bottomでclampして正しい位置を計算する
+  // grid-cellはoverflow:hiddenで、day-expander(8px)がposition:absolute;bottom:0に配置されている
+  // そのためItemが視覚的に表示される領域のbottomは cellRect.bottom - DAY_EXPANDER_HEIGHT
+  const DAY_EXPANDER_HEIGHT = 8;
   const dayItemEls = cellEl.querySelectorAll('.single-day-item');
   let top: number;
   if (dayItemEls.length > 0) {
     const lastItemRect = dayItemEls[dayItemEls.length - 1].getBoundingClientRect();
-    const clampedBottom = Math.min(lastItemRect.bottom, cellRect.bottom);
+    // 視覚的なclip境界（overflow:hiddenのday-expander分を除いた領域）でclamp
+    const visibleBottom = cellRect.bottom - DAY_EXPANDER_HEIGHT;
+    const clampedBottom = Math.min(lastItemRect.bottom, visibleBottom);
     top = clampedBottom + 2 - contentRect.top + scrollTop;
   } else {
     // アイテムなし（all-dayアイテムのみでremainingSlots=0等）: chrome-cellの底辺を基準
