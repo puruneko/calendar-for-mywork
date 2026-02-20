@@ -30,6 +30,8 @@ let {
 let expandedDay: DateTime | null = $state(null);
 // 展開パネルの位置・サイズ（calendar-content基準の絶対座標）
 let expandedPanelStyle: string = $state('');
+// 展開パネルの位置計算が完了したかどうか（完了前はvisibility:hiddenで隠す）
+let expandedPanelReady: boolean = $state(false);
 // calendar-contentのDOM参照
 let calendarContentEl: HTMLElement | null = $state(null);
 
@@ -221,6 +223,7 @@ function recalculatePanelPosition() {
   const left = cellRect.left - contentRect.left;
   const width = cellRect.width;
   expandedPanelStyle = `left: ${left}px; top: ${top}px; width: ${width}px;`;
+  expandedPanelReady = true;
 }
 
 // items の変化を $effect で確実に追跡するための derived
@@ -234,10 +237,19 @@ $effect(() => {
   // $derived経由でitemsの変化を確実に追跡
   const _version = itemsVersion;
   const _expandedDay = expandedDay;
-  if (!_expandedDay) return;
+  if (!_expandedDay) {
+    expandedPanelReady = false;
+    return;
+  }
+  // 位置計算前は非表示にして、計算完了後に表示する（位置ずれ一瞬表示を防ぐ）
+  expandedPanelReady = false;
   // DOM更新完了後に再計算
-  // tick()でSvelte DOM更新後、さらにrAFでCSSリフロー完了を待ってから座標計算
-  tick().then(() => requestAnimationFrame(() => recalculatePanelPosition()));
+  // tick()でSvelte DOM更新後、ダブルrAFでCSSリフロー（--allday-height変化等）完了を確実に待つ
+  tick().then(() => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => recalculatePanelPosition());
+    });
+  });
 });
 
 // day-expanderクリック: 展開パネルをトグル
@@ -709,7 +721,8 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
       <!-- オーバーレイ背景（クリックで閉じる） -->
       <div class="expanded-panel-overlay" onclick={handlePanelOutsideClick}></div>
       <!-- 展開パネル本体（grid-cellの真下にピッタリ） -->
-      <div class="expanded-panel" style={expandedPanelStyle}>
+      <!-- expandedPanelReadyがtrueになるまでvisibility:hiddenで隠す（位置ずれ一瞬表示を防ぐ） -->
+      <div class="expanded-panel" style="{expandedPanelStyle}; visibility: {expandedPanelReady ? 'visible' : 'hidden'}">
         <!-- 隠れていたItemのみ表示 -->
         {#each expandedHiddenItems as item (item.id)}
           <div
