@@ -231,7 +231,8 @@ $effect(() => {
   const _expandedDay = expandedDay;
   if (!_expandedDay) return;
   // DOM更新完了後に再計算
-  tick().then(() => recalculatePanelPosition());
+  // tick()でSvelte DOM更新後、さらにrAFでCSSリフロー完了を待ってから座標計算
+  tick().then(() => requestAnimationFrame(() => recalculatePanelPosition()));
 });
 
 // day-expanderクリック: 展開パネルをトグル
