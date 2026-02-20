@@ -401,84 +401,64 @@ function handleDragStartContinuous(event: DragEvent, item: CalendarItem, weekDay
 // DnD: ドラッグ開始（allday-item バー用）
 // バー内のマウスX座標から「バーの何日目をつかんだか」を計算し、dragOffsetDaysに設定する。
 // 例: 水木金(span=3)のバーの「木」部分をつかんだ場合、offsetDays=1
+// requestAnimationFrameでdraggedItemをセットしてゴースト画像生成後にopacity変更
 function handleDragStart(event: DragEvent, item: CalendarItem, barStartIndex: number, weekDays: DateTime[]) {
-  draggedItem = item;
-  
-  // ドラッグ中のアイテムを視覚的に示す
   const target = event.target as HTMLElement;
   const barElement = target.closest('.allday-item') as HTMLElement;
-  if (barElement) {
-    barElement.style.opacity = '0.5';
-  }
-  
-  const itemStart = getItemStart(item);
-  if (!itemStart) {
-    dragOffsetDays = 0;
-    dragGrabbedDate = null;
-    if (event.dataTransfer) {
-      event.dataTransfer.effectAllowed = 'move';
-      event.dataTransfer.setData('text/plain', item.id);
-    }
-    return;
-  }
 
-  if (isMultiDayItem(item)) {
+  const itemStart = getItemStart(item);
+
+  let newDragOffsetDays = 0;
+  let newDragGrabbedDate: DateTime | null = null;
+
+  if (itemStart && isMultiDayItem(item)) {
     // バー要素のX座標からつかんだ列（週内インデックス）を計算
     const barRect = barElement?.getBoundingClientRect();
     if (barRect && barRect.width > 0) {
-      // バーは span 列分の幅を持つ。1列あたりの幅 = barRect.width / span
-      const itemEnd = getItemEnd(item);
-      const spanDays = itemEnd
-        ? Math.ceil(itemEnd.diff(itemStart, 'days').days)
-        : 1;
-      // バー全体が週内に収まっているとは限らないので、週内表示span を使う
-      // barElement の幅 = 週内表示span × セル幅
-      const mouseXInBar = event.clientX - barRect.left;
-      const cellWidth = barRect.width; // allday-itemのwidthはCSS変数で決まる
-      // week内でのバーの表示spanを取得（allday-itemのwidthはspan/7*100%）
-      // セル幅 = barRect.width / displaySpan
-      // displaySpanはCSSの--spanと同じ値
       const displaySpan = parseInt(barElement?.style?.getPropertyValue('--span') ?? '1') || 1;
       const perCellWidth = barRect.width / displaySpan;
-      
-      // バー内での列インデックス（0 = バーの先頭列）
+      const mouseXInBar = event.clientX - barRect.left;
       const grabCellInBar = Math.floor(mouseXInBar / perCellWidth);
       const clampedGrabCellInBar = Math.max(0, Math.min(grabCellInBar, displaySpan - 1));
-      
-      // 週内でのつかんだ列インデックス
       const weekGrabIndex = barStartIndex + clampedGrabCellInBar;
       const grabbedDay = weekDays[weekGrabIndex] ?? weekDays[barStartIndex];
-      
-      // アイテムの実際の開始日からつかんだ日までのオフセット（日数）
-      dragOffsetDays = Math.floor(grabbedDay.startOf('day').diff(itemStart.startOf('day'), 'days').days);
-      dragGrabbedDate = grabbedDay.startOf('day');
-      
-      console.debug(`[MonthView DnD] barStartIndex=${barStartIndex}, displaySpan=${displaySpan}, grabCellInBar=${clampedGrabCellInBar}, grabbedDay=${grabbedDay.toISODate()}, dragOffsetDays=${dragOffsetDays}`);
+      newDragOffsetDays = Math.floor(grabbedDay.startOf('day').diff(itemStart.startOf('day'), 'days').days);
+      newDragGrabbedDate = grabbedDay.startOf('day');
+      console.debug(`[MonthView DnD] barStartIndex=${barStartIndex}, displaySpan=${displaySpan}, grabCellInBar=${clampedGrabCellInBar}, grabbedDay=${grabbedDay.toISODate()}, dragOffsetDays=${newDragOffsetDays}`);
     } else {
-      dragOffsetDays = 0;
-      dragGrabbedDate = itemStart.startOf('day');
+      newDragGrabbedDate = itemStart.startOf('day');
     }
-  } else {
-    // 単日アイテム: オフセットなし
-    dragOffsetDays = 0;
-    dragGrabbedDate = null;
   }
-  
+
   if (event.dataTransfer) {
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', item.id);
   }
+
+  // requestAnimationFrameでゴースト画像生成後にdraggedItemをセット（opacityを変える）
+  requestAnimationFrame(() => {
+    draggedItem = item;
+    dragOffsetDays = newDragOffsetDays;
+    dragGrabbedDate = newDragGrabbedDate;
+    if (barElement) {
+      barElement.style.opacity = '0.5';
+    }
+  });
 }
 
 // DnD: ドラッグ開始（単日アイテム用 - オフセットなし）
+// requestAnimationFrameでdraggedItemをセットすることで、ブラウザがゴースト画像を
+// 生成した後にdisplay:noneが適用され、DnDが正常に機能する
 function handleSingleDayDragStart(event: DragEvent, item: CalendarItem) {
-  draggedItem = item;
-  dragOffsetDays = 0;
-  dragGrabbedDate = null;
   if (event.dataTransfer) {
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', item.id);
   }
+  requestAnimationFrame(() => {
+    draggedItem = item;
+    dragOffsetDays = 0;
+    dragGrabbedDate = null;
+  });
 }
 
 // DnD: ドラッグ終了

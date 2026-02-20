@@ -912,7 +912,8 @@ test.describe('MonthView - DnD機能', () => {
     page.on('console', msg => consoleLogs.push(msg.text()));
 
     // DnD操作: expanded-panel内のItemを別のgrid-cellにドロップ
-    await page.evaluate(() => {
+    // requestAnimationFrame後にdraggedItemがセットされるため、drop前に1フレーム待つ
+    await page.evaluate(() => new Promise<void>(resolve => {
       const panelItem = document.querySelector('.expanded-panel .single-day-item') as HTMLElement;
       const targetCell = document.querySelector('.grid-cell') as HTMLElement;
       if (!panelItem || !targetCell) throw new Error('Elements not found');
@@ -920,12 +921,14 @@ test.describe('MonthView - DnD機能', () => {
       const dt = new DataTransfer();
       panelItem.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }));
 
-      // dragging-active状態でexpanded-panelのpointer-eventsがnoneになるため
-      // grid-cellに直接dragover/dropを発火
-      targetCell.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
-      targetCell.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
-      panelItem.dispatchEvent(new DragEvent('dragend', { bubbles: true, cancelable: true }));
-    });
+      // requestAnimationFrame後にdraggedItemがセットされるので1フレーム待ってからdrop
+      requestAnimationFrame(() => {
+        targetCell.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+        targetCell.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+        panelItem.dispatchEvent(new DragEvent('dragend', { bubbles: true, cancelable: true }));
+        resolve();
+      });
+    }));
 
     await page.waitForTimeout(200);
 
@@ -951,7 +954,8 @@ test.describe('MonthView - DnD機能', () => {
     page.on('console', msg => consoleLogs.push(msg.text()));
 
     // allday-itemをallday-grid-line-cellにドロップ
-    await page.evaluate(() => {
+    // requestAnimationFrame後にdraggedItemがセットされるため、drop前に1フレーム待つ
+    await page.evaluate(() => new Promise<void>(resolve => {
       const barEl = document.querySelector('.allday-item') as HTMLElement;
       // 2番目のallday-grid-line-cell（別の日）をターゲットに
       const targetCell = document.querySelectorAll('.allday-grid-line-cell')[2] as HTMLElement;
@@ -961,10 +965,15 @@ test.describe('MonthView - DnD機能', () => {
       dt.setData('text/plain', barEl.dataset.id ?? '');
 
       barEl.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }));
-      targetCell.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
-      targetCell.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
-      barEl.dispatchEvent(new DragEvent('dragend', { bubbles: true, cancelable: true }));
-    });
+
+      // requestAnimationFrame後にdraggedItemがセットされるので1フレーム待ってからdrop
+      requestAnimationFrame(() => {
+        targetCell.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+        targetCell.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+        barEl.dispatchEvent(new DragEvent('dragend', { bubbles: true, cancelable: true }));
+        resolve();
+      });
+    }));
 
     await page.waitForTimeout(200);
 
