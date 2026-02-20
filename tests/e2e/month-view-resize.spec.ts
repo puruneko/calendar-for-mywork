@@ -11,7 +11,7 @@ test.describe('MonthView - 複数日アイテムのリサイズ', () => {
   test('複数日バーにリサイズハンドルが表示されること', async ({ page }) => {
     console.log('[TEST] 複数日バーにリサイズハンドルが表示されることを確認');
     
-    const multiDayBar = page.locator('.multi-day-bar').first();
+    const multiDayBar = page.locator('.multi-day-bar-continuous').first();
     await multiDayBar.hover();
     
     // リサイズハンドルの存在確認
@@ -28,7 +28,7 @@ test.describe('MonthView - 複数日アイテムのリサイズ', () => {
     console.log('[TEST] 複数日バーの左端リサイズで開始日が変更されることを確認');
     
     // 複数日バーを探す（3日間の研修など）
-    const multiDayBar = page.locator('.multi-day-bar').first();
+    const multiDayBar = page.locator('.multi-day-bar-continuous').first();
     await multiDayBar.hover();
     
     // 左端のリサイズハンドルを取得
@@ -57,7 +57,7 @@ test.describe('MonthView - 複数日アイテムのリサイズ', () => {
   test('複数日バーの右端をドラッグして終了日を変更できること', async ({ page }) => {
     console.log('[TEST] 複数日バーの右端リサイズで終了日が変更されることを確認');
     
-    const multiDayBar = page.locator('.multi-day-bar').first();
+    const multiDayBar = page.locator('.multi-day-bar-continuous').first();
     await multiDayBar.hover();
     
     // 右端のリサイズハンドルを取得
@@ -83,7 +83,7 @@ test.describe('MonthView - 複数日アイテムのリサイズ', () => {
   test('リサイズハンドルにホバーすると色が変わること', async ({ page }) => {
     console.log('[TEST] リサイズハンドルのホバー効果を確認');
     
-    const multiDayBar = page.locator('.multi-day-bar').first();
+    const multiDayBar = page.locator('.multi-day-bar-continuous').first();
     await multiDayBar.hover();
     
     const leftHandle = multiDayBar.locator('.resize-handle-left');

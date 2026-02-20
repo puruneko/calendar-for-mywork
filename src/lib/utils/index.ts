@@ -5,3 +5,4 @@
 export * from './dateUtils';
 export * from './dndUtils';
 export * from './itemUtils';
+export * from './laneLayoutAlgorithm';

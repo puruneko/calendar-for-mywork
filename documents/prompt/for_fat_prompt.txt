@@ -1,0 +1,478 @@
+- 重要ルール
+    - for_fat_prompt.txtの指示に従って開発を進めるときは、initial_prompt.mdは情報が古いので読まないでください。
+
+
+- 以下はバーが正しい位置に表示されない件について、大幅な構造変更と配置に関する実装方法・アルゴリズムの提案です。google calendarにも採用されているアイディアですので、以下を遵守しながら実装をしてください。
+    - 注意：下記で「week」が指しているものはweekViewではなく、monthViewの週を表す行のことです。下記はすべてmonthViewの改善についての指示です。
+
+
+# UI
+
+You must refactor the calendar week rendering so that **Date Header, All-Day (multi-day), and Single-Day items are NOT rendered in the same coordinate system.**
+
+This is a structural requirement.
+Do NOT attempt to fix overlaps using z-index, spacers, or table-cell tricks.
+
+---
+
+## 1. Architectural Rule (Non-Negotiable)
+
+A week row must be composed of **three independent layout layers**:
+
+1. **Week Chrome Layer** → date numbers, holiday markers, background UI
+2. **All-Day Canvas Layer** → multi-day spanning bars only
+3. **Day Grid Layer** → single-day items only
+
+These layers must share column alignment but must NOT share layout flow.
+
+---
+
+## 2. Table Usage Restriction
+
+The `<table>` element may ONLY be used for vertical week stacking.
+
+You must NOT use `<td>` as individual day layout containers.
+
+Incorrect (must remove):
+
+```html
+<tr>
+  <td>day1</td>
+  <td>day2</td>
+</tr>
+```
+
+Correct pattern:
+
+```html
+<tr class="week-row">
+  <td colspan="7">
+    <div class="week-stack">
+      <div class="week-chrome"></div>
+      <div class="week-allday"></div>
+      <div class="week-grid"></div>
+    </div>
+  </td>
+</tr>
+```
+
+The week is ONE cell. Internal layout is handled by CSS Grid.
+
+---
+
+## 3. Column Alignment (Shared Grid Definition)
+
+All three layers must use the SAME grid definition:
+
+```css
+.week-chrome,
+.week-allday,
+.week-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+}
+```
+
+This guarantees visual alignment without DOM coupling.
+
+Do NOT compute pixel offsets manually.
+
+---
+
+## 4. Layer Responsibilities
+
+### 4.1 Week Chrome Layer (Non-interactive UI)
+
+Used only for:
+
+* day numbers
+* static decorations
+
+```css
+.week-chrome {
+  position: relative;
+  z-index: 3;
+  pointer-events: none; /* must not block interactions */
+}
+```
+
+This layer must NEVER contain events.
+
+---
+
+### 4.2 All-Day Layer (Multi-Day Bars Only)
+
+Receives output from the lane layout algorithm.
+
+```css
+.week-allday {
+  position: relative;
+  z-index: 2;
+  height: var(--allday-height);
+}
+```
+
+All multi-day bars must be absolutely positioned inside this layer.
+
+They must NOT live inside day cells.
+
+---
+
+### 4.3 Day Grid Layer (Single-Day Items Only)
+
+Handles normal calendar items and DnD interactions.
+
+```css
+.week-grid {
+  position: relative;
+  z-index: 1;
+}
+```
+
+Single-day items must never overlap with multi-day bars because
+vertical space is reserved by `--allday-height`.
+
+---
+
+## 5. Vertical Space Reservation (Critical)
+
+The height of the All-Day area must be computed from lane count:
+
+```ts
+const height = laneCount * ALLDAY_ROW_HEIGHT;
+weekElement.style.setProperty('--allday-height', `${height}px`);
+```
+
+Do NOT insert spacer elements.
+Do NOT push content using margins.
+
+Layout must be deterministic and data-driven.
+
+---
+
+## 6. Absolute Positioning Model for Multi-Day Bars
+
+Each placement returned from the algorithm must render like:
+
+```css
+.allday-item {
+  position: absolute;
+  top: calc(var(--lane) * var(--lane-height));
+  left: calc(var(--start-index) * (100% / 7));
+  width: calc(var(--span) * (100% / 7));
+}
+```
+
+You must NOT measure DOM widths with JS.
+
+All positioning must be expressed as percentages of the 7-column grid.
+
+---
+
+## 7. Forbidden Anti-Patterns
+
+You are NOT allowed to:
+
+* Use `rowspan` / `colspan` tricks for events
+* Insert hidden spacer divs to avoid overlap
+* Adjust layout after render
+* Depend on hover behavior of adjacent `<td>`
+* Use JS to “fix” collisions visually
+* Couple multi-day rendering to single-day DOM
+
+If you see any of these patterns, remove them.
+
+---
+
+## 8. Why This Refactor Exists (For Your Understanding)
+
+Multi-day events are **not children of a specific day**.
+They are intervals spanning the week coordinate space.
+
+Therefore they must be rendered in a separate canvas that understands spans,
+while single-day items remain cell-based interactions.
+
+Mixing them causes:
+
+* hover clipping
+* broken drag-and-drop hit testing
+* stacking-context bugs
+* non-deterministic layout
+
+---
+
+## 9. Acceptance Criteria
+
+Implementation is correct ONLY if:
+
+✔ Multi-day bars never get clipped by day cells
+✔ Hovering adjacent days does not affect multi-day rendering
+✔ Removing all single-day items does not change multi-day layout
+✔ Layout remains identical across rerenders (no DOM-driven shifts)
+✔ No spacer elements exist in the DOM
+✔ DnD hit-testing can target multi-day bars independently
+
+---
+
+## Deliverable
+
+Refactor the week renderer to follow this 3-layer composition exactly.
+Do not implement new features during this change.
+This is a structural correction required before further calendar behavior is added.
+
+
+
+# logic
+
+You are implementing the **multi-day (all-day spanning) lane layout algorithm** for our calendar.
+
+This is NOT a visual tweak.
+You must implement a **deterministic interval-packing algorithm** that decides vertical lanes BEFORE rendering.
+
+The renderer will only draw what this algorithm outputs.
+
+---
+
+## 1. Data Contract (Do NOT Change)
+
+We already use this type:
+
+```ts
+export interface CalendarDateRange {
+  startDate: string; // ISO date only: 'YYYY-MM-DD'
+  endDate?: string;  // exclusive end (undefined = single day)
+}
+```
+
+Multi-day items are provided as:
+
+```ts
+export interface AllDayItem {
+  id: string;
+  dateRange: CalendarDateRange;
+}
+```
+
+---
+
+## 2. Week Context Input
+
+The algorithm runs **per week**.
+
+You will receive:
+
+```ts
+interface WeekContext {
+  weekStart: string; // ISO date (start of visible week)
+  weekEnd: string;   // ISO date (exclusive)
+  items: AllDayItem[];
+}
+```
+
+All calculations MUST be clamped to this visible week.
+
+---
+
+## 3. Normalize Items Into Day Index Space
+
+Convert each item into a **closed-open interval in day indices**:
+
+```ts
+interface NormalizedItem {
+  id: string;
+  startIndex: number; // 0–6
+  endIndex: number;   // exclusive, 1–7
+  span: number;       // endIndex - startIndex
+}
+```
+
+Rules:
+
+1. Use ONLY date-level math (no timezones, no hours).
+2. Clamp to the visible week:
+
+```
+startIndex = max(0, difference(item.startDate, weekStart))
+endIndex   = min(7, difference(item.endDateExclusive, weekStart))
+```
+
+3. If `endDate` is undefined → treat as single day:
+
+```
+endIndex = startIndex + 1
+```
+
+4. Drop items where `startIndex >= endIndex`.
+
+---
+
+## 4. Sorting Rule (Critical — MUST MATCH)
+
+Sort normalized items using:
+
+```
+1. startIndex ASC
+2. span DESC  (longer bars first)
+3. id ASC     (stable tie-breaker)
+```
+
+This is REQUIRED to prevent layout instability.
+
+---
+
+## 5. Lane Packing Algorithm (Deterministic)
+
+We assign items into vertical lanes so that **items in the same lane never overlap**.
+
+Data structure:
+
+```ts
+interface Lane {
+  lastEndIndex: number;
+  items: NormalizedItem[];
+}
+```
+
+Algorithm:
+
+```
+lanes = []
+
+for item in sortedItems:
+
+  placed = false
+
+  for lane in lanes:
+    if lane.lastEndIndex <= item.startIndex:
+        lane.items.push(item)
+        lane.lastEndIndex = item.endIndex
+        placed = true
+        break
+
+  if not placed:
+      create new lane with:
+        lastEndIndex = item.endIndex
+        items = [item]
+```
+
+You MUST scan lanes in insertion order.
+Do NOT try to optimize with trees or heaps.
+
+This guarantees stable visual output.
+
+---
+
+## 6. Output Format (Renderer Contract)
+
+Return:
+
+```ts
+export interface LaneLayout {
+  laneCount: number;
+  placements: {
+    id: string;
+    lane: number;       // vertical index
+    startIndex: number; // column start
+    span: number;       // width in days
+  }[];
+}
+```
+
+Lane index = array index in `lanes`.
+
+---
+
+## 7. Rendering Rules (Handled Later, But You Must Respect)
+
+This algorithm MUST NOT:
+
+* read DOM
+* measure pixels
+* depend on CSS
+* insert spacers
+* reorder after calculation
+
+It is a PURE FUNCTION:
+
+```
+layoutWeekAllDay(context) => LaneLayout
+```
+
+---
+
+## 8. Required Helper (Create This)
+
+Implement a strict date-only diff:
+
+```ts
+function diffDaysISO(a: string, b: string): number
+```
+
+Rules:
+
+* Parse as UTC midnight.
+* No Luxon / no timezone logic.
+* Must return exact integer difference.
+
+---
+
+## 9. Example (Must Pass)
+
+Input:
+
+```
+weekStart = 2026-02-16
+
+A: 16–20
+B: 17–19
+C: 19–21 (clamped to 19–22 exclusive -> index 3–5)
+```
+
+Expected layout:
+
+```
+Lane 0: A
+Lane 1: B
+Lane 1: C   (fits after B ends)
+```
+
+laneCount = 2
+
+---
+
+## 10. Complexity Requirement
+
+Your implementation must be:
+
+```
+O(n log n) due to sorting
+O(n × laneCount) packing
+```
+
+No quadratic scanning across all items.
+
+---
+
+## 11. Absolutely Forbidden
+
+Do NOT:
+
+* calculate layout in CSS
+* use `z-index` to solve collisions
+* depend on table cell structure
+* mutate input data
+* auto-sort differently on rerender
+
+This must behave like a scheduler, not a visual hack.
+
+---
+
+## Definition of Done
+
+✔ Same input always produces identical layout
+✔ No overlaps inside a lane
+✔ Lane count is minimal
+✔ Works with 1,000+ items deterministically
+✔ Pure function with unit tests
+
+Implement ONLY this algorithm. Rendering will be added separately.

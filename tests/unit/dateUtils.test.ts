@@ -13,6 +13,7 @@ import {
   formatTime,
   formatDate,
   formatWeekday,
+  diffDaysISO,
 } from '../../src/lib/utils/dateUtils';
 
 describe('dateUtils', () => {
@@ -103,6 +104,64 @@ describe('dateUtils', () => {
       const weekday = formatWeekday(dateTime, 'ja');
       
       expect(weekday).toMatch(/火/);
+    });
+  });
+
+  describe('diffDaysISO', () => {
+    it('同じ日付の場合は0を返すこと', () => {
+      expect(diffDaysISO('2026-02-17', '2026-02-17')).toBe(0);
+    });
+
+    it('正の日数差を正しく計算すること', () => {
+      // 2026-02-17 から 2026-02-20 は 3日後
+      expect(diffDaysISO('2026-02-17', '2026-02-20')).toBe(3);
+    });
+
+    it('負の日数差を正しく計算すること', () => {
+      // 2026-02-20 から 2026-02-17 は 3日前
+      expect(diffDaysISO('2026-02-20', '2026-02-17')).toBe(-3);
+    });
+
+    it('月をまたぐ日数差を正しく計算すること', () => {
+      // 2026-02-28 から 2026-03-03 は 3日後
+      expect(diffDaysISO('2026-02-28', '2026-03-03')).toBe(3);
+    });
+
+    it('年をまたぐ日数差を正しく計算すること', () => {
+      // 2025-12-30 から 2026-01-02 は 3日後
+      expect(diffDaysISO('2025-12-30', '2026-01-02')).toBe(3);
+    });
+
+    it('タイムゾーンの影響を受けないこと（UTC midnight基準）', () => {
+      // ISO文字列のみで計算されるため、タイムゾーンは考慮されない
+      expect(diffDaysISO('2026-02-16', '2026-02-17')).toBe(1);
+      expect(diffDaysISO('2026-02-16', '2026-02-23')).toBe(7);
+    });
+
+    it('週の範囲の計算に使用できること', () => {
+      // 週の開始日から各日までの差分
+      const weekStart = '2026-02-16'; // 月曜日
+      expect(diffDaysISO(weekStart, '2026-02-16')).toBe(0); // 月
+      expect(diffDaysISO(weekStart, '2026-02-17')).toBe(1); // 火
+      expect(diffDaysISO(weekStart, '2026-02-18')).toBe(2); // 水
+      expect(diffDaysISO(weekStart, '2026-02-19')).toBe(3); // 木
+      expect(diffDaysISO(weekStart, '2026-02-20')).toBe(4); // 金
+      expect(diffDaysISO(weekStart, '2026-02-21')).toBe(5); // 土
+      expect(diffDaysISO(weekStart, '2026-02-22')).toBe(6); // 日
+    });
+
+    it('for_fat_promptの例題を正しく計算すること', () => {
+      // weekStart = 2026-02-16
+      // A: 16–20 → startIndex=0, endIndex=4
+      // B: 17–19 → startIndex=1, endIndex=3
+      // C: 19–21 → startIndex=3, endIndex=5
+      const weekStart = '2026-02-16';
+      
+      expect(diffDaysISO(weekStart, '2026-02-16')).toBe(0);
+      expect(diffDaysISO(weekStart, '2026-02-17')).toBe(1);
+      expect(diffDaysISO(weekStart, '2026-02-19')).toBe(3);
+      expect(diffDaysISO(weekStart, '2026-02-20')).toBe(4);
+      expect(diffDaysISO(weekStart, '2026-02-21')).toBe(5);
     });
   });
 });

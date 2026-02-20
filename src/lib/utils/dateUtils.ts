@@ -80,3 +80,25 @@ export function formatDate(dateTime: DateTime): string {
 export function formatWeekday(dateTime: DateTime, locale: string = 'ja'): string {
   return dateTime.setLocale(locale).toFormat('ccc');
 }
+
+/**
+ * ISO日付文字列間の日数差を計算（タイムゾーン非依存）
+ * 
+ * @param dateA - ISO日付文字列 (YYYY-MM-DD)
+ * @param dateB - ISO日付文字列 (YYYY-MM-DD)
+ * @returns dateB - dateA の日数差（dateB が後なら正、前なら負）
+ * 
+ * 注意: この関数はタイムゾーンの影響を受けないよう、UTC midnightで計算します。
+ * レーン配置アルゴリズムで使用するため、Luxonを使用せず純粋なDate APIで実装。
+ */
+export function diffDaysISO(dateA: string, dateB: string): number {
+  // ISO文字列を UTC midnight として解釈
+  const a = new Date(dateA + 'T00:00:00Z');
+  const b = new Date(dateB + 'T00:00:00Z');
+  
+  // ミリ秒差を日数に変換
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const diffMs = b.getTime() - a.getTime();
+  
+  return Math.round(diffMs / msPerDay);
+}
