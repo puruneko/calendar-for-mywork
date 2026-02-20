@@ -223,11 +223,16 @@ function recalculatePanelPosition() {
   expandedPanelStyle = `left: ${left}px; top: ${top}px; width: ${width}px;`;
 }
 
+// items の変化を $effect で確実に追跡するための derived
+// $props() で受け取った items は $effect の依存追跡に乗らないケースがあるため、
+// $derived 経由で参照することで確実に変化を検知する
+let itemsVersion = $derived(items.length + items.reduce((acc, i) => acc + (getItemStart(i)?.toMillis() ?? 0) + (getItemEnd(i)?.toMillis() ?? 0), 0));
+
 // items または expandedDay が変化したとき、パネル位置をDOMから再計算
 // alldayItemの移動でレーン数が変化しgrid-cellの位置がずれても正しく追従する
 $effect(() => {
-  // itemsとexpandedDayを追跡（どちらかが変化したら再計算）
-  const _items = items;
+  // $derived経由でitemsの変化を確実に追跡
+  const _version = itemsVersion;
   const _expandedDay = expandedDay;
   if (!_expandedDay) return;
   // DOM更新完了後に再計算

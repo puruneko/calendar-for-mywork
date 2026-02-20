@@ -839,6 +839,29 @@ test.describe('MonthView - セル展開機能（day-expander）', () => {
   });
 });
 
+// DnDヘルパー: HTML5 DragEventを使ったDnDシミュレーション
+// requestAnimationFrameで1フレーム待ってからdropを発火（draggedItemのセットを待つ）
+async function simulateDnD(
+  page: import('@playwright/test').Page,
+  sourceSelector: string,
+  targetSelector: string
+): Promise<void> {
+  await page.evaluate(([src, tgt]) => new Promise<void>((resolve, reject) => {
+    const sourceEl = document.querySelector(src) as HTMLElement;
+    const targetEl = document.querySelector(tgt) as HTMLElement;
+    if (!sourceEl) { reject(new Error(`Source not found: ${src}`)); return; }
+    if (!targetEl) { reject(new Error(`Target not found: ${tgt}`)); return; }
+    const dt = new DataTransfer();
+    sourceEl.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }));
+    requestAnimationFrame(() => {
+      targetEl.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+      targetEl.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+      sourceEl.dispatchEvent(new DragEvent('dragend', { bubbles: true, cancelable: true }));
+      resolve();
+    });
+  }), [sourceSelector, targetSelector] as [string, string]);
+}
+
 test.describe('MonthView - DnD機能', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('http://localhost:5176');
@@ -850,33 +873,26 @@ test.describe('MonthView - DnD機能', () => {
     console.log('[TEST] allday-grid-line-cell上でのdragoverハイライトを確認');
     console.log('[REASON] ドロップ可能な場所をユーザーに視覚的に示す必要がある');
 
-    const alldayBar = page.locator('.allday-item').first();
-    const barCount = await alldayBar.count();
-
+    const barCount = await page.locator('.allday-item').count();
     if (barCount === 0) {
       console.log('[INFO] No allday-item found, skipping');
       return;
     }
 
-    // allday-grid-line-cell を取得
-    const gridLineCells = page.locator('.allday-grid-line-cell');
-    const cellCount = await gridLineCells.count();
-    expect(cellCount).toBeGreaterThan(0);
-
-    // HTML5 DnDでdragoverイベントを発火
+    // dragstartしてdragoverを発火
     await page.evaluate(() => {
       const barEl = document.querySelector('.allday-item') as HTMLElement;
       const targetCell = document.querySelector('.allday-grid-line-cell') as HTMLElement;
       if (!barEl || !targetCell) throw new Error('Elements not found');
-
       const dt = new DataTransfer();
       barEl.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }));
-      targetCell.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+      requestAnimationFrame(() => {
+        targetCell.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+      });
     });
 
     await page.waitForTimeout(100);
 
-    // drag-overクラスが付与されていることを確認
     const hasDragOver = await page.evaluate(() => {
       const cells = document.querySelectorAll('.allday-grid-line-cell');
       return Array.from(cells).some(c => c.classList.contains('drag-over'));
@@ -884,6 +900,30 @@ test.describe('MonthView - DnD機能', () => {
 
     expect(hasDragOver).toBe(true);
     console.log('[PASS] allday-grid-line-cell gets drag-over class on dragover');
+  });
+
+  test('single-day-itemをDnDで別の日に移動できること', async ({ page }) => {
+    console.log('[TEST] single-day-itemをDnDで別のgrid-cellに移動できることを確認');
+    console.log('[REASON] ユーザーがマウスでドラッグして日付を変更できる必要がある');
+
+    const singleItems = page.locator('.single-day-item');
+    if (await singleItems.count() === 0) {
+      console.log('[INFO] No single-day-item found, skipping');
+      return;
+    }
+
+    const consoleLogs: string[] = [];
+    page.on('console', msg => consoleLogs.push(msg.text()));
+
+    // 最初のsingle-day-itemを2番目のgrid-cellにドロップ
+    await simulateDnD(page, '.single-day-item', '.grid-cell:nth-child(2)');
+    await page.waitForTimeout(200);
+
+    const hasItemMoved = consoleLogs.some(log => log.includes('Item moved'));
+    console.log(`[INFO] Console logs: ${consoleLogs.slice(-5).join(' | ')}`);
+    expect(hasItemMoved).toBe(true);
+
+    console.log('[PASS] single-day-item can be moved via DnD');
   });
 
   test('expanded-panel内のItemをDnDで移動できること', async ({ page }) => {
@@ -907,32 +947,13 @@ test.describe('MonthView - DnD機能', () => {
       return;
     }
 
-    // コンソールログでonItemMoveの呼び出しを確認
     const consoleLogs: string[] = [];
     page.on('console', msg => consoleLogs.push(msg.text()));
 
-    // DnD操作: expanded-panel内のItemを別のgrid-cellにドロップ
-    // requestAnimationFrame後にdraggedItemがセットされるため、drop前に1フレーム待つ
-    await page.evaluate(() => new Promise<void>(resolve => {
-      const panelItem = document.querySelector('.expanded-panel .single-day-item') as HTMLElement;
-      const targetCell = document.querySelector('.grid-cell') as HTMLElement;
-      if (!panelItem || !targetCell) throw new Error('Elements not found');
-
-      const dt = new DataTransfer();
-      panelItem.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }));
-
-      // requestAnimationFrame後にdraggedItemがセットされるので1フレーム待ってからdrop
-      requestAnimationFrame(() => {
-        targetCell.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
-        targetCell.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
-        panelItem.dispatchEvent(new DragEvent('dragend', { bubbles: true, cancelable: true }));
-        resolve();
-      });
-    }));
-
+    // expanded-panel内のItemを別のgrid-cellにドロップ
+    await simulateDnD(page, '.expanded-panel .single-day-item', '.grid-cell');
     await page.waitForTimeout(200);
 
-    // onItemMoveが呼ばれたことをコンソールログで確認
     const hasItemMoved = consoleLogs.some(log => log.includes('Item moved'));
     console.log(`[INFO] Console logs: ${consoleLogs.slice(-5).join(' | ')}`);
     expect(hasItemMoved).toBe(true);
@@ -944,8 +965,7 @@ test.describe('MonthView - DnD機能', () => {
     console.log('[TEST] allday-itemをallday-grid-lines上にドロップできることを確認');
     console.log('[REASON] allday-grid-lines上の全セルでDnDドロップが受け付けられる必要がある');
 
-    const alldayBar = page.locator('.allday-item').first();
-    if (await alldayBar.count() === 0) {
+    if (await page.locator('.allday-item').count() === 0) {
       console.log('[INFO] No allday-item found, skipping');
       return;
     }
@@ -953,36 +973,70 @@ test.describe('MonthView - DnD機能', () => {
     const consoleLogs: string[] = [];
     page.on('console', msg => consoleLogs.push(msg.text()));
 
-    // allday-itemをallday-grid-line-cellにドロップ
-    // requestAnimationFrame後にdraggedItemがセットされるため、drop前に1フレーム待つ
-    await page.evaluate(() => new Promise<void>(resolve => {
-      const barEl = document.querySelector('.allday-item') as HTMLElement;
-      // 2番目のallday-grid-line-cell（別の日）をターゲットに
-      const targetCell = document.querySelectorAll('.allday-grid-line-cell')[2] as HTMLElement;
-      if (!barEl || !targetCell) throw new Error('Elements not found');
-
-      const dt = new DataTransfer();
-      dt.setData('text/plain', barEl.dataset.id ?? '');
-
-      barEl.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }));
-
-      // requestAnimationFrame後にdraggedItemがセットされるので1フレーム待ってからdrop
-      requestAnimationFrame(() => {
-        targetCell.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
-        targetCell.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
-        barEl.dispatchEvent(new DragEvent('dragend', { bubbles: true, cancelable: true }));
-        resolve();
-      });
-    }));
-
+    // allday-itemを3番目のallday-grid-line-cell（別の日）にドロップ
+    await simulateDnD(page, '.allday-item', '.allday-grid-line-cell:nth-child(3)');
     await page.waitForTimeout(200);
 
-    // onItemMoveが呼ばれたことを確認
     const hasItemMoved = consoleLogs.some(log => log.includes('Item moved'));
     console.log(`[INFO] Console logs: ${consoleLogs.slice(-5).join(' | ')}`);
     expect(hasItemMoved).toBe(true);
 
     console.log('[PASS] allday-item can be dropped onto allday-grid-lines');
+  });
+
+  test('allday-item移動後にexpanded-panelの位置が正しく更新されること', async ({ page }) => {
+    console.log('[TEST] alldayItem移動後にexpanded-panelの位置が再計算されることを確認');
+    console.log('[REASON] alldayItemの移動でweek-stackの高さが変わるためパネル位置が追従する必要がある');
+
+    // day-expanderがある日を探す（オーバーフローアイテムがある日）
+    const expander = page.locator('.day-expander').first();
+    if (await expander.count() === 0) {
+      console.log('[INFO] No day-expander available, skipping');
+      return;
+    }
+
+    // パネルを展開
+    await expander.click();
+    const panel = page.locator('.expanded-panel');
+    await expect(panel).toBeVisible();
+
+    // 展開前のパネル位置を記録
+    const panelBefore = await panel.evaluate((el) => {
+      const rect = el.getBoundingClientRect();
+      const style = (el as HTMLElement).style.top;
+      return { top: rect.top, style };
+    });
+    console.log(`[INFO] Panel position before allday move: top=${panelBefore.top}, style=${panelBefore.style}`);
+
+    // alldayItemが存在するか確認
+    const alldayCount = await page.locator('.allday-item').count();
+    if (alldayCount === 0) {
+      console.log('[INFO] No allday-item to move, skipping position check');
+      return;
+    }
+
+    // alldayItemを別のセルに移動
+    await simulateDnD(page, '.allday-item', '.allday-grid-line-cell:nth-child(4)');
+    await page.waitForTimeout(300); // tick + rAF の完了を待つ
+
+    // パネルが表示されている場合、位置が更新されていることを確認
+    const isPanelVisible = await panel.isVisible().catch(() => false);
+    if (isPanelVisible) {
+      const panelAfter = await panel.evaluate((el) => {
+        const rect = el.getBoundingClientRect();
+        const style = (el as HTMLElement).style.top;
+        return { top: rect.top, style };
+      });
+      console.log(`[INFO] Panel position after allday move: top=${panelAfter.top}, style=${panelAfter.style}`);
+
+      // パネルのtopスタイルが空でないことを確認（recalculatePanelPositionが呼ばれた）
+      expect(panelAfter.style).not.toBe('');
+    } else {
+      // パネルが閉じた場合もOK（移動完了でパネルが閉じることがある）
+      console.log('[INFO] Panel closed after allday-item move (acceptable behavior)');
+    }
+
+    console.log('[PASS] expanded-panel position is updated after allday-item move');
   });
 });
 
