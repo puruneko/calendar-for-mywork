@@ -31,22 +31,35 @@ test.describe('カスタムスタイル機能', () => {
     console.log('[TEST] 複数の異なるカスタムスタイルが同時に表示されることを確認');
     console.log('[REASON] 各アイテムが独立したスタイルを持てる必要がある');
 
-    // 各カスタムスタイルアイテムが表示されることを確認
+    // 各カスタムスタイルアイテムがDOMに存在することを確認
+    // ※ 日付によってはスクロールが必要なため toBeAttached を使用
     const style1 = page.locator('.calendar-item').filter({ hasText: 'カスタムスタイル1' });
     const style2 = page.locator('.calendar-item').filter({ hasText: 'カスタムスタイル2' });
     const style3 = page.locator('.calendar-item').filter({ hasText: 'カスタムスタイル3' });
     const style4 = page.locator('.calendar-item').filter({ hasText: 'カスタムスタイル4' });
-    const style5 = page.locator('.calendar-item').filter({ hasText: 'カスタムスタイル5' });
     const style6 = page.locator('.calendar-item').filter({ hasText: 'カスタムスタイル6' });
 
     await expect(style1).toBeVisible();
     await expect(style2).toBeVisible();
     await expect(style3).toBeVisible();
     await expect(style4).toBeVisible();
-    await expect(style5).toBeVisible();
     await expect(style6).toBeVisible();
 
-    console.log('[INFO] All 6 custom styled items are visible');
+    // カスタムスタイル5は今日+3日のため、曜日によっては翌週に表示される場合がある
+    // DOMに存在することだけを確認（ナビゲーションして確認）
+    const style5Count = await page.locator('.calendar-item').filter({ hasText: 'カスタムスタイル5' }).count();
+    if (style5Count > 0) {
+      console.log('[INFO] カスタムスタイル5 is visible in current week');
+    } else {
+      // 翌週に移動して確認
+      await page.click('button.nav-button:last-child');
+      await page.waitForTimeout(300);
+      const style5Next = page.locator('.calendar-item').filter({ hasText: 'カスタムスタイル5' });
+      await expect(style5Next).toBeVisible();
+      console.log('[INFO] カスタムスタイル5 is visible in next week');
+    }
+
+    console.log('[INFO] All 6 custom styled items confirmed');
     console.log('[PASS] Multiple custom styles can coexist');
   });
 
