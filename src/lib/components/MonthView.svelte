@@ -202,11 +202,14 @@ function recalculatePanelPosition() {
 
   // パネルのtop: 最後に表示されているsingle-day-itemのbottom基準
   // → アイテム間隔(gap: 2px)がそのまま続くように見せ、「セルが延長された」錯覚を与える
+  // ただしgrid-cellはoverflow:hiddenのため、lastItemがcellの外にはみ出す場合は
+  // cellRect.bottomでclampして正しい位置を計算する
   const dayItemEls = cellEl.querySelectorAll('.single-day-item');
   let top: number;
   if (dayItemEls.length > 0) {
     const lastItemRect = dayItemEls[dayItemEls.length - 1].getBoundingClientRect();
-    top = lastItemRect.bottom + 2 - contentRect.top + scrollTop;
+    const clampedBottom = Math.min(lastItemRect.bottom, cellRect.bottom);
+    top = clampedBottom + 2 - contentRect.top + scrollTop;
   } else {
     // アイテムなし（all-dayアイテムのみでremainingSlots=0等）: chrome-cellの底辺を基準
     const chromeCellEl = cellEl.closest('.week-stack')?.querySelector('.week-chrome')?.children[
