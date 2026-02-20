@@ -687,6 +687,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
           <div
             class="month-item single-day-item"
             class:multi-day-expanded={isMultiDayItem(item)}
+            class:dragging={draggedItem === item}
             draggable="true"
             ondragstart={(e) => handleSingleDayDragStart(e, item)}
             ondragend={handleDragEnd}
@@ -752,6 +753,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
                 <div
                   class="allday-grid-line-cell"
                   class:first={i === 0}
+                  class:drag-over={dragOverDay?.hasSame(week[i], 'day')}
                   ondragover={(e) => handleDragOver(e, week[i])}
                   ondrop={(e) => handleDrop(e, week[i])}
                 ></div>
@@ -887,6 +889,15 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
   /* ドラッグ中はオーバーレイを透過させてドロップ先のcellにイベントを届ける */
   .calendar-content.dragging-active .expanded-panel-overlay {
     pointer-events: none;
+  }
+
+  /* ドラッグ中はexpanded-panel自体もpointer-events:noneにしてドロップ先cellにイベントを届ける */
+  /* ドラッグ中のitem(.dragging)はautoのまま維持 */
+  .calendar-content.dragging-active .expanded-panel {
+    pointer-events: none;
+  }
+  .calendar-content.dragging-active .expanded-panel .month-item.dragging {
+    pointer-events: auto;
   }
 
   .month-header {
@@ -1088,6 +1099,10 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
 
   .allday-grid-line-cell.first {
     border-left: none;
+  }
+
+  .allday-grid-line-cell.drag-over {
+    background-color: rgba(33, 150, 243, 0.1);
   }
 
   .allday-item {
