@@ -216,10 +216,22 @@
 ## 実装状態トラッキング
 
 - [x] Phase 1: レーン配置アルゴリズムの実装と単体テスト ✅ (Commit: 9dd97dd)
-- [ ] Phase 2: MonthViewの構造リファクタリング
-- [ ] Phase 3: 複数日アイテムの配置精度向上とインタラクション修正
-- [ ] Phase 4: +N more展開機能の調整とエッジケース対応
-- [ ] Phase 5: パフォーマンス検証と最終調整
+- [x] Phase 2: MonthViewの構造リファクタリング ✅ (Commit: 9218637)
+  - テストを新3層構造クラス名（.grid-cell, .allday-item, .chrome-cell等）に更新
+  - MonthViewにリサイズハンドル（.resize-handle-left/.resize-handle-right）を追加
+  - 旧CSSクラス（.day-cell, .multi-day-bar等）を完全削除
+  - overlay-hit-test.spec.ts、month-view-resize.spec.tsを全面書き直し
+  - custom-style.spec.tsの日付依存テストを修正
+- [x] Phase 3: 複数日アイテムの配置精度向上とインタラクション修正 ✅ (Phase 2に統合)
+  - CSS変数（--lane, --start-index, --span）による正確な絶対位置配置を実装済み
+  - DnD・リサイズのクラス参照を.allday-itemに統一
+  - pointer-events設定（chrome: none, allday/grid: auto）適切に設定済み
+- [x] Phase 4: +N more展開機能の調整とエッジケース対応 ✅ (Phase 2に統合)
+  - .grid-cell.expandedクラスで展開状態を管理
+  - 展開時にmulti-day-item-expanded + single-day-itemの両方を表示
+- [x] Phase 5: パフォーマンス検証と最終調整 ✅ (Phase 1に実装済み)
+  - 100アイテムを100ms以内で処理する単体テスト実装済み
+  - 全テスト: 単体58件 + E2E 73件パス（2スキップ）
 
 ---
 
@@ -227,3 +239,4 @@
 
 - 2026-02-20: 初版作成
 - 2026-02-20: Phase 1完了 - レーン配置アルゴリズム実装、全58単体テスト合格
+- 2026-02-20: Phase 2-5完了 - MonthView 3層構造リファクタリング、テスト全面更新、全フェーズ完了
