@@ -1,5 +1,6 @@
 <script lang="ts">
 import { DateTime } from 'luxon';
+import { tick } from 'svelte';
 import type { CalendarItem } from '../models';
 import { formatTime, getItemStart, getItemEnd, itemContainsDay, isTimed, layoutWeekAllDay, type AllDayItem, formatDate } from '../utils';
 
@@ -185,19 +186,14 @@ function isExpanded(day: DateTime): boolean {
   return expandedDay !== null && expandedDay.hasSame(day, 'day');
 }
 
-// day-expanderクリック: 展開パネルをトグル
-// cellEl: クリックされたgrid-cell要素
-// hiddenItems: 隠れていたItemのリスト（overflowCount分）
-function toggleExpand(event: MouseEvent, day: DateTime, cellEl: HTMLElement, hiddenItems: CalendarItem[]) {
-  event.stopPropagation();
-  if (isExpanded(day)) {
-    expandedDay = null;
-    expandedPanelStyle = '';
-    return;
-  }
+// expanded-panelの位置をDOMから再計算してexpandedPanelStyleに反映
+// expandedDayまたはitemsが変化したとき（alldayItem移動等）に呼ばれる
+function recalculatePanelPosition() {
+  if (!expandedDay || !calendarContentEl) return;
+  const dateStr = expandedDay.toISODate();
+  const cellEl = calendarContentEl.querySelector(`.grid-cell[data-date="${dateStr}"]`) as HTMLElement | null;
+  if (!cellEl) return;
 
-  // calendar-content基準の絶対座標を計算
-  if (!calendarContentEl) return;
   const contentRect = calendarContentEl.getBoundingClientRect();
   const cellRect = cellEl.getBoundingClientRect();
   const scrollTop = calendarContentEl.scrollTop;
@@ -208,7 +204,6 @@ function toggleExpand(event: MouseEvent, day: DateTime, cellEl: HTMLElement, hid
   let top: number;
   if (dayItemEls.length > 0) {
     const lastItemRect = dayItemEls[dayItemEls.length - 1].getBoundingClientRect();
-    // gap: 2px 分を足してアイテム間隔を揃える
     top = lastItemRect.bottom + 2 - contentRect.top + scrollTop;
   } else {
     // アイテムなし（all-dayアイテムのみでremainingSlots=0等）: chrome-cellの底辺を基準
@@ -223,11 +218,33 @@ function toggleExpand(event: MouseEvent, day: DateTime, cellEl: HTMLElement, hid
     }
   }
 
-  // left・widthはgrid-cellに完全一致（セルが延長されたように見せる）
   const left = cellRect.left - contentRect.left;
   const width = cellRect.width;
-
   expandedPanelStyle = `left: ${left}px; top: ${top}px; width: ${width}px;`;
+}
+
+// items または expandedDay が変化したとき、パネル位置をDOMから再計算
+// alldayItemの移動でレーン数が変化しgrid-cellの位置がずれても正しく追従する
+$effect(() => {
+  // itemsとexpandedDayを追跡（どちらかが変化したら再計算）
+  const _items = items;
+  const _expandedDay = expandedDay;
+  if (!_expandedDay) return;
+  // DOM更新完了後に再計算
+  tick().then(() => recalculatePanelPosition());
+});
+
+// day-expanderクリック: 展開パネルをトグル
+// cellEl: クリックされたgrid-cell要素
+// hiddenItems: 隠れていたItemのリスト（overflowCount分）
+function toggleExpand(event: MouseEvent, day: DateTime) {
+  event.stopPropagation();
+  if (isExpanded(day)) {
+    expandedDay = null;
+    expandedPanelStyle = '';
+    return;
+  }
+  // expandedDayをセットすると$effectが発火してrecalculatePanelPositionが呼ばれる
   expandedDay = day;
 }
 
@@ -813,6 +830,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
 
               <div
                 class="grid-cell"
+                data-date={day.toISODate()}
                 class:drag-over={dragOverDay?.hasSame(day, 'day')}
                 onclick={(e) => handleCellClick(e, day)}
                 ondragover={(e) => handleDragOver(e, day)}
@@ -840,7 +858,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
                 {#if overflowCount > 0 && !expanded}
                   <button
                     class="day-expander"
-                    onclick={(e) => { toggleExpand(e, day, e.currentTarget.closest('.grid-cell') as HTMLElement, hiddenItems); }}
+                    onclick={(e) => { toggleExpand(e, day); }}
                     title={`さらに${overflowCount}件`}
                     aria-label={`さらに${overflowCount}件表示`}
                   >
@@ -1319,9 +1337,9 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     cursor: grabbing;
   }
 
-  /* ドラッグ中の単日Itemをgrid-cellから非表示にして下のItemを詰める */
+  /* ドラッグ中の単日Itemを半透明にして「移動中」を示す（allday-itemと同様） */
   .single-day-item.dragging {
-    display: none;
+    opacity: 0.4;
   }
 
 
