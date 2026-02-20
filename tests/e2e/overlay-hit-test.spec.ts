@@ -103,8 +103,10 @@ test.describe('MonthView - Multi-day Bar Overlay Hit Test', () => {
     console.log('[TEST] week-alldayレイヤーのz-indexがweek-gridより高いことを確認');
     console.log('[REASON] 複数日バーが単日アイテムより前面に表示される必要がある');
 
-    const weekAllday = page.locator('.week-allday').first();
-    await weekAllday.waitFor({ state: 'visible' });
+    // week-alldayはlaneCount=0のとき height:0 で visible にならない場合がある
+    // alldayアイテムがある週のweek-alldayを取得する
+    const weekAllday = page.locator('.week-allday').filter({ has: page.locator('.allday-item') }).first();
+    await weekAllday.waitFor({ state: 'attached' });
 
     const alldayZIndex = await weekAllday.evaluate(el => {
       return window.getComputedStyle(el).zIndex;

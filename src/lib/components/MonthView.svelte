@@ -500,21 +500,36 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
   if (week.length === 0) return [];
   
   // CalendarItemをAllDayItem形式に変換
+  // layoutWeekAllDayのdateRange.endはexclusive（終了日の翌日）
+  // timed itemのendはinclusive時刻（例: 17:00）なので、日付部分を+1日してexclusiveに変換する
+  // allday itemのendはdateRangeのexclusive endをそのまま使用する
   const allDayItems: AllDayItem[] = items
     .filter(item => isMultiDayItem(item))
     .map(item => {
       const start = getItemStart(item);
       const end = getItemEnd(item);
-      
+      if (!start || !end) return null;
+
+      let endDateStr: string;
+      if (item.dateRange) {
+        // AllDay item: dateRange.end は既にexclusive
+        endDateStr = formatDate(end);
+      } else {
+        // Timed item: end は "2/23 17:00" のような時刻付き → 翌日のstartOfDayをexclusiveとする
+        // "2/21 09:00" 〜 "2/23 17:00" のアイテムは 2/21, 2/22, 2/23 の3日間を占める
+        // exclusive endは 2/24
+        endDateStr = formatDate(end.plus({ days: 1 }).startOf('day'));
+      }
+
       return {
         id: item.id,
         dateRange: {
-          start: start ? formatDate(start) : '',
-          end: end ? formatDate(end) : undefined,
+          start: formatDate(start),
+          end: endDateStr,
         },
       };
     })
-    .filter(item => item.dateRange.start !== ''); // 有効な日付のみ
+    .filter((item): item is AllDayItem => item !== null && item.dateRange.start !== ''); // 有効な日付のみ
   
   // 週の開始日と終了日を取得
   const weekStart = formatDate(week[0]);
@@ -596,7 +611,14 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
           </div>
 
           <!-- Layer 2: All-Day Canvas (multi-day bars) - absolute positioned inside week-allday -->
+          <!-- week-alldayは完全透明。縦罫線はallday-grid-linesで描画 -->
           <div class="week-allday">
+            <!-- 縦罫線用の透明グリッド（week-gridと同じ列幅） -->
+            <div class="allday-grid-lines" aria-hidden="true">
+              {#each week as _, i}
+                <div class="allday-grid-line-cell" class:first={i === 0}></div>
+              {/each}
+            </div>
             {#each multiDayItemsInWeek as {item, startIndex, span, lane}}
               <div
                 class="allday-item"
@@ -842,8 +864,13 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     font-weight: 600;
     font-size: 14px;
     color: #666;
-    border: 1px solid #e0e0e0;
+    /* 縦の罫線のみ（左） */
+    border-left: 1px solid #e0e0e0;
     box-sizing: border-box;
+  }
+
+  .weekday:first-child {
+    border-left: none;
   }
 
   /* カレンダーボディ：週ごとのブロック */
@@ -853,14 +880,25 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
   }
 
   /* ===== Week Stack: 3層を縦に積む ===== */
+  /*
+   * week-stackが1つのカレンダー行（週）を表す。
+   * 外枠の罫線はweek-stackに持たせ、内部の各層は罫線を持たない。
+   * - 左右は縦線（各セルの左border）
+   * - 上下は横線（week-stackのtop borderのみ、bottomは次のweek-stackのtopで共有）
+   */
   .week-stack {
     position: relative;
     display: flex;
     flex-direction: column;
-    /* allday層の高さをCSS変数で管理 */
+    border-top: 1px solid #e0e0e0;
+  }
+
+  .calendar-body .week-stack:last-child {
+    border-bottom: 1px solid #e0e0e0;
   }
 
   /* ===== Layer 1: Week Chrome (日付番号) ===== */
+  /* chrome層は日付番号のみ表示。背景・罫線はgrid層が担当 */
   .week-chrome {
     position: relative;
     z-index: 3;
@@ -868,17 +906,16 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
   }
 
   .chrome-cell {
-    border: 1px solid #e0e0e0;
-    border-top: none;
+    /* 縦の罫線のみ（左） */
+    border-left: 1px solid #e0e0e0;
     padding: 4px;
     min-height: 30px;
     box-sizing: border-box;
     position: relative;
   }
 
-  /* 先頭週の上ボーダーを出す */
-  .week-stack:first-child .chrome-cell {
-    border-top: 1px solid #e0e0e0;
+  .chrome-cell:first-child {
+    border-left: none;
   }
 
   .chrome-cell.today {
@@ -914,7 +951,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
 
   /* ===== Layer 2: All-Day Canvas (複数日バー) ===== */
   /*
-   * week-alldayはchrome層のすぐ下に来る。
+   * week-alldayは完全透明にして罫線はallday-grid-linesで描画。
    * allday-itemは週全体を基準に絶対配置する。
    * 高さは laneCount * 24px。laneが0なら高さ0で消える。
    */
@@ -922,10 +959,29 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     position: relative;
     z-index: 2;
     height: var(--allday-height, 0px);
-    /* 幅はweek-stackに合わせてfull width */
     width: 100%;
     overflow: visible;
     pointer-events: none; /* 子要素(allday-item)のみイベントを受ける */
+    background: transparent;
+  }
+
+  /* allday領域の縦罫線（week-gridと同じ列幅に合わせた透明グリッド） */
+  .allday-grid-lines {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .allday-grid-line-cell {
+    border-left: 1px solid #e0e0e0;
+    height: 100%;
+    box-sizing: border-box;
+  }
+
+  .allday-grid-line-cell.first {
+    border-left: none;
   }
 
   .allday-item {
@@ -1001,24 +1057,23 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
   }
 
   /* ===== Layer 3: Day Grid (単日アイテム) ===== */
-  /*
-   * week-gridはallday層のすぐ下に来る。
-   * 各grid-cellの上部にallday-heightぶんのpaddingを入れることで
-   * alldayバーがgrid-cellの内容に被らないようにする。
-   */
   .week-grid {
     position: relative;
     z-index: 1;
   }
 
   .grid-cell {
-    border: 1px solid #e0e0e0;
-    border-top: none;
+    /* 縦の罫線のみ（左）。横線はweek-stackのborder-topで担当 */
+    border-left: 1px solid #e0e0e0;
     padding: 4px;
     min-height: 120px;
     cursor: pointer;
     position: relative;
     box-sizing: border-box;
+  }
+
+  .grid-cell:first-child {
+    border-left: none;
   }
 
   .grid-cell:hover {
