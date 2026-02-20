@@ -645,6 +645,9 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
                 class="chrome-cell"
                 class:today={isToday}
                 class:other-month={!isCurrentMonth}
+                class:drag-over={dragOverDay?.hasSame(day, 'day')}
+                ondragover={(e) => handleDragOver(e, day)}
+                ondrop={(e) => handleDrop(e, day)}
               >
                 <div
                   class="day-number"
@@ -718,6 +721,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
                 ondragover={(e) => handleDragOver(e, day)}
                 ondrop={(e) => handleDrop(e, day)}
               >
+                <!-- 通常時: 単日アイテム表示エリア -->
                 <div class="day-items">
                   {#if expanded}
                     <!-- 展開時: 全アイテム（複数日 + 単日）を表示 -->
@@ -755,7 +759,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
                       </div>
                     {/each}
                   {:else}
-                    <!-- 通常時: 単日アイテムのみ表示 -->
+                    <!-- 通常時: 単日アイテムのみ表示（上限まで） -->
                     {#each singleDayItems.slice(0, remainingSlots) as item (item.id)}
                       <div
                         class="month-item single-day-item"
@@ -771,25 +775,17 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
                       </div>
                     {/each}
                   {/if}
-
-                  {#if !expanded && overflowCount > 0}
-                    <div
-                      class="more-items"
-                      onclick={(e) => handleMoreClick(e, day)}
-                    >
-                      +{overflowCount} more
-                    </div>
-                  {/if}
-
-                  {#if expanded}
-                    <div
-                      class="hide-items"
-                      onclick={(e) => handleHideClick(e)}
-                    >
-                      hide
-                    </div>
-                  {/if}
                 </div>
+
+                <!-- resizerボタン: オーバーフロー時に下部に表示 -->
+                {#if overflowCount > 0 || expanded}
+                  <div
+                    class="cell-resizer"
+                    class:expanded={expanded}
+                    onclick={(e) => { e.stopPropagation(); expanded ? handleHideClick(e) : handleMoreClick(e, day); }}
+                    title={expanded ? '折りたたむ' : `さらに${overflowCount}件`}
+                  ></div>
+                {/if}
               </div>
             {/each}
           </div>
@@ -948,7 +944,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
   .week-chrome {
     position: relative;
     z-index: 3;
-    pointer-events: none; /* クリックを下層に透過 */
+    /* pointer-eventsはauto: chrome-cellがDnDイベント(dragover/drop)を受け取る */
   }
 
   .chrome-cell {
@@ -966,6 +962,10 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
 
   .chrome-cell.today {
     background-color: #e3f2fd;
+  }
+
+  .chrome-cell.drag-over {
+    background-color: rgba(33, 150, 243, 0.15);
   }
 
   .chrome-cell.other-month {
@@ -1133,18 +1133,60 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
   }
 
   .grid-cell.expanded {
-    height: auto;
+    /* 他セルの高さを変えずに前面に展開 */
+    height: var(--grid-cell-height, 120px); /* セル自体の高さは固定のまま */
     overflow: visible;
+    z-index: 50; /* 他セルより前面 */
+    background-color: white; /* 下のセルを隠す */
+  }
+
+  /* 展開時のday-itemsは高さ制限を解除して全件表示 */
+  .grid-cell.expanded .day-items {
+    overflow: visible;
+    background-color: white;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    border: 1px solid #e0e0e0;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    padding: 4px;
+    position: relative;
+    z-index: 50;
   }
 
   .day-items {
     display: flex;
     flex-direction: column;
     gap: 2px;
-    overflow-y: auto !important; /* スクロール可能に（必須） */
-    overflow-x: visible; /* 複数日バーがセル間をオーバーレイできるように */
+    overflow: hidden;
     flex: 1;
-    position: relative; /* 複数日バーの絶対配置基準点 */
+    position: relative;
+  }
+
+  /* resizerボタン: grid-cellの下端に配置 */
+  .cell-resizer {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 6px;
+    background-color: #e0e0e0;
+    cursor: s-resize;
+    z-index: 51;
+    transition: background-color 0.15s;
+    border-radius: 0 0 2px 2px;
+  }
+
+  .cell-resizer:hover {
+    background-color: #2196f3;
+  }
+
+  .cell-resizer.expanded {
+    cursor: n-resize;
+    background-color: #bdbdbd;
+  }
+
+  .cell-resizer.expanded:hover {
+    background-color: #2196f3;
   }
 
   .month-item {
@@ -1203,32 +1245,5 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     color: #333;
   }
 
-  .more-items {
-    padding: 2px 4px;
-    font-size: 11px;
-    color: #2196f3;
-    cursor: pointer;
-    font-weight: 500;
-  }
-
-  .more-items:hover {
-    text-decoration: underline;
-  }
-
-  .hide-items {
-    font-size: 11px;
-    color: #666;
-    cursor: pointer;
-    padding: 4px 8px;
-    text-align: center;
-    border-radius: 2px;
-    margin-top: 4px;
-    border-top: 1px solid #e0e0e0;
-    background-color: #f5f5f5;
-    font-weight: 500;
-  }
-
-  .hide-items:hover {
-    background-color: #e0e0e0;
-  }
+  /* .more-items / .hide-items は cell-resizer に統合したため削除 */
 </style>

@@ -527,37 +527,35 @@ test.describe('MonthView - 日付クリックでWeekView遷移', () => {
   });
 });
 
-test.describe('MonthView - スクロール', () => {
+test.describe('MonthView - セル高さ固定', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('http://localhost:5176');
     await page.click('button:has-text("月表示")');
     await page.waitForSelector('.month-view');
   });
 
-  test('1日に多数のアイテムがある場合、セル内でスクロールできること', async ({ page }) => {
-    console.log('[TEST] 1日に多数のアイテムがある場合、セル内でスクロールできることを確認');
-    console.log('[REASON] すべてのアイテムにアクセスできる必要がある');
+  test('全週でgrid-cellの高さが同じであること', async ({ page }) => {
+    console.log('[TEST] 全週でgrid-cellの高さが同じであることを確認');
+    console.log('[REASON] 各週の行高さが固定で揃っている必要がある');
 
-    // 新3層構造では単日アイテムは .grid-cell 内の .day-items に存在
-    // .grid-cell は drag-over クラスも持つので最初のものを参照
     const gridCells = page.locator('.grid-cell');
     const count = await gridCells.count();
+    expect(count).toBeGreaterThan(0);
 
-    if (count > 0) {
-      const dayItems = gridCells.first().locator('.day-items');
-      
-      // day-itemsがoverflow-y: autoを持つことを確認
-      const overflowY = await dayItems.evaluate((el) => {
-        return window.getComputedStyle(el).overflowY;
-      });
+    // 全セルの高さを取得
+    const heights = await gridCells.evaluateAll((cells) =>
+      cells.map((el) => el.getBoundingClientRect().height)
+    );
 
-      console.log(`[INFO] Day items overflow-y: ${overflowY}`);
-      expect(overflowY).toBe('auto');
-
-      console.log('[PASS] Day items container has scroll capability');
-    } else {
-      console.log('[INFO] No grid cells found');
+    // 展開されていないセルは全て同じ高さ
+    const unexpandedHeights = heights.filter(h => h > 0);
+    const firstHeight = unexpandedHeights[0];
+    for (const h of unexpandedHeights) {
+      expect(Math.abs(h - firstHeight)).toBeLessThan(2); // 2px以内の誤差を許容
     }
+
+    console.log(`[INFO] All grid cells have height: ${firstHeight}px`);
+    console.log('[PASS] All grid cells have the same height');
   });
 });
 
@@ -688,62 +686,64 @@ test.describe('MonthView - 複数日にまたがるアイテム', () => {
   });
 });
 
-test.describe('MonthView - +N more機能（セル内展開）', () => {
+test.describe('MonthView - セル展開機能（cell-resizer）', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('http://localhost:5176');
     await page.click('button:has-text("月表示")');
     await page.waitForSelector('.month-view');
   });
 
-  test('1日に4件以上のアイテムがある場合、+N moreが表示されること', async ({ page }) => {
-    console.log('[TEST] 1日に4件以上のアイテムがある場合、+N moreが表示されることを確認');
-    console.log('[REASON] 高さ制限により表示できないアイテムを示す必要がある');
+  test('上限以上のアイテムがある日にcell-resizerが表示されること', async ({ page }) => {
+    console.log('[TEST] 上限以上のアイテムがある日にcell-resizerが表示されることを確認');
+    console.log('[REASON] 隠れたアイテムを展開できることを示すresizerが必要');
 
-    // 今日のセル（デモデータで多数のアイテムがある）
-    const todayCell = page.locator('.day-cell.today');
-    const todayCount = await todayCell.count();
+    const resizer = page.locator('.cell-resizer').first();
+    const count = await resizer.count();
 
-    if (todayCount > 0) {
-      const moreLink = todayCell.locator('.more-items');
-      const moreCount = await moreLink.count();
+    console.log(`[INFO] cell-resizer count: ${count}`);
+    if (count > 0) {
+      await expect(resizer).toBeVisible();
 
-      if (moreCount > 0) {
-        await expect(moreLink).toBeVisible();
-        
-        const moreText = await moreLink.textContent();
-        console.log(`[INFO] More link text: ${moreText}`);
-        expect(moreText).toMatch(/\+\d+ more/);
+      // カーソルがs-resize（下矢印）であることを確認
+      const cursor = await resizer.evaluate((el) =>
+        window.getComputedStyle(el).cursor
+      );
+      console.log(`[INFO] Resizer cursor: ${cursor}`);
+      expect(cursor).toBe('s-resize');
 
-        console.log('[PASS] +N more is displayed');
-      } else {
-        console.log('[INFO] No +N more link (less than 4 items on today)');
-      }
+      console.log('[PASS] cell-resizer is displayed for overflow cells');
     } else {
-      console.log('[INFO] Today is not in current month view');
+      console.log('[INFO] No overflow cells in current view');
     }
   });
 
-  test('+N moreをクリックするとセルが展開されること', async ({ page }) => {
-    console.log('[TEST] +N moreをクリックするとセルが展開されることを確認');
-    console.log('[REASON] すべてのアイテムをセル内で表示する手段を提供する必要がある');
+  test('cell-resizerをクリックするとセルが展開されること', async ({ page }) => {
+    console.log('[TEST] cell-resizerをクリックするとセルが展開されることを確認');
+    console.log('[REASON] resizerクリックで全件表示に切り替わる必要がある');
 
-    const moreLink = page.locator('.more-items').first();
-    const count = await moreLink.count();
+    const resizer = page.locator('.cell-resizer').first();
+    const count = await resizer.count();
 
     if (count > 0) {
-      await moreLink.click();
-      
-      // 新3層構造では .grid-cell.expanded クラスが付与される
+      await resizer.click();
+
+      // .grid-cell.expanded が表示される
       const expandedCell = page.locator('.grid-cell.expanded');
       await expect(expandedCell).toBeVisible();
 
-      // hideボタンが表示される
-      const hideButton = page.locator('.hide-items');
-      await expect(hideButton).toBeVisible();
+      // resizerがexpandedクラスを持つ（n-resizeカーソル）
+      const expandedResizer = expandedCell.locator('.cell-resizer.expanded');
+      await expect(expandedResizer).toBeVisible();
 
-      console.log('[PASS] Cell is expanded on +N more click');
+      const cursor = await expandedResizer.evaluate((el) =>
+        window.getComputedStyle(el).cursor
+      );
+      console.log(`[INFO] Expanded resizer cursor: ${cursor}`);
+      expect(cursor).toBe('n-resize');
+
+      console.log('[PASS] Cell is expanded on cell-resizer click');
     } else {
-      console.log('[INFO] No +N more links available');
+      console.log('[INFO] No cell-resizer available');
     }
   });
 
@@ -751,15 +751,13 @@ test.describe('MonthView - +N more機能（セル内展開）', () => {
     console.log('[TEST] 展開されたセルに全アイテムが表示されることを確認');
     console.log('[REASON] 隠れたアイテムも含めて全て表示する必要がある');
 
-    const moreLink = page.locator('.more-items').first();
-    const count = await moreLink.count();
+    const resizer = page.locator('.cell-resizer').first();
+    const count = await resizer.count();
 
     if (count > 0) {
-      await moreLink.click();
-      
-      // 新3層構造では .grid-cell.expanded を使用
+      await resizer.click();
+
       const expandedCell = page.locator('.grid-cell.expanded');
-      // 展開セル内の全アイテム（single-day-item + multi-day-item-expanded）を数える
       const singleItems = expandedCell.locator('.single-day-item');
       const multiItems = expandedCell.locator('.multi-day-item-expanded');
       const singleCount = await singleItems.count();
@@ -767,75 +765,77 @@ test.describe('MonthView - +N more機能（セル内展開）', () => {
       const expandedItemCount = singleCount + multiCount;
 
       console.log(`[INFO] Expanded cell shows ${expandedItemCount} items (single: ${singleCount}, multi: ${multiCount})`);
-      // 展開時には非表示だったアイテムが表示されることを確認
       expect(expandedItemCount).toBeGreaterThan(0);
 
       console.log('[PASS] All items are displayed in expanded cell');
     } else {
-      console.log('[INFO] No +N more links available');
+      console.log('[INFO] No cell-resizer available');
     }
   });
 
-  test('hideボタンをクリックするとセルが折りたたまれること', async ({ page }) => {
-    console.log('[TEST] hideボタンをクリックするとセルが折りたたまれることを確認');
-    console.log('[REASON] ユーザーが展開したセルを簡単に閉じられる必要がある');
+  test('展開済みcell-resizerをクリックすると折りたたまれること', async ({ page }) => {
+    console.log('[TEST] 展開済みcell-resizerをクリックすると折りたたまれることを確認');
+    console.log('[REASON] ユーザーが展開したセルを閉じられる必要がある');
 
-    const moreLink = page.locator('.more-items').first();
-    const count = await moreLink.count();
+    const resizer = page.locator('.cell-resizer').first();
+    const count = await resizer.count();
 
     if (count > 0) {
-      // セルを展開
-      await moreLink.click();
-      
-      // 新3層構造では .grid-cell.expanded を使用
+      // 展開
+      await resizer.click();
       const expandedCell = page.locator('.grid-cell.expanded');
       await expect(expandedCell).toBeVisible();
 
-      // hideボタンをクリック
-      const hideButton = page.locator('.hide-items');
-      await hideButton.click();
+      // 再度クリックして折りたたむ
+      const expandedResizer = expandedCell.locator('.cell-resizer.expanded');
+      await expandedResizer.click();
 
-      // セルが折りたたまれる（expandedクラスが消える）
       await expect(expandedCell).not.toBeVisible();
 
-      // +N moreが再表示される
-      await expect(moreLink).toBeVisible();
+      // resizerが通常状態に戻る
+      await expect(resizer).toBeVisible();
+      const cursor = await resizer.evaluate((el) =>
+        window.getComputedStyle(el).cursor
+      );
+      expect(cursor).toBe('s-resize');
 
-      console.log('[PASS] Cell collapses on hide button click');
+      console.log('[PASS] Cell collapses on second resizer click');
     } else {
-      console.log('[INFO] No +N more links available');
+      console.log('[INFO] No cell-resizer available');
     }
   });
 
-  test('展開されたセルが自然なスタイルで表示され、日付が見えること', async ({ page }) => {
-    console.log('[TEST] 展開されたセルが自然なスタイルで表示され、日付が見えることを確認');
-    console.log('[REASON] 日付が見えて、セルの通常の枠を使う自然な展開が必要');
+  test('展開時に他のセルの高さが変わらないこと', async ({ page }) => {
+    console.log('[TEST] 展開時に他のセルの高さが変わらないことを確認');
+    console.log('[REASON] overflow:visibleで最前面に展開するため、他セルは影響を受けない');
 
-    const moreLink = page.locator('.more-items').first();
-    const count = await moreLink.count();
+    const gridCells = page.locator('.grid-cell');
+    const resizer = page.locator('.cell-resizer').first();
 
-    if (count > 0) {
-      await moreLink.click();
-      
-      // 新3層構造では .grid-cell.expanded を使用
-      const expandedCell = page.locator('.grid-cell.expanded');
-      await expect(expandedCell).toBeVisible();
+    if (await resizer.count() > 0) {
+      // 展開前の全セルの高さ
+      const heightsBefore = await gridCells.evaluateAll((cells) =>
+        cells.map((el) => el.getBoundingClientRect().height)
+      );
 
-      // 展開セルにmore-itemsが非表示になることを確認
-      const moreItemsInExpanded = expandedCell.locator('.more-items');
-      await expect(moreItemsInExpanded).not.toBeVisible();
+      await resizer.click();
+      await page.waitForTimeout(100);
 
-      // hideボタンが表示されることを確認
-      const hideButton = expandedCell.locator('.hide-items');
-      await expect(hideButton).toBeVisible();
+      // 展開後の全セルの高さ（展開セル以外）
+      const heightsAfter = await gridCells.evaluateAll((cells) =>
+        cells.map((el, i) => ({ h: el.getBoundingClientRect().height, expanded: el.classList.contains('expanded') }))
+      );
 
-      // 展開セルに day-items が存在することを確認
-      const dayItemsDiv = expandedCell.locator('.day-items');
-      await expect(dayItemsDiv).toBeVisible();
+      // 展開されていないセルの高さは変わらない
+      for (let i = 0; i < heightsBefore.length; i++) {
+        if (!heightsAfter[i].expanded) {
+          expect(Math.abs(heightsAfter[i].h - heightsBefore[i])).toBeLessThan(2);
+        }
+      }
 
-      console.log('[PASS] Expanded cell has natural styling with visible date');
+      console.log('[PASS] Other cells height unchanged when one cell is expanded');
     } else {
-      console.log('[INFO] No +N more links available');
+      console.log('[INFO] No cell-resizer available');
     }
   });
 });
