@@ -272,18 +272,34 @@ function toggleExpand(event: MouseEvent, day: DateTime) {
   expandedDay = day;
 }
 
-// 展開パネル外クリックで閉じる
-function handlePanelOutsideClick(event: MouseEvent) {
-  event.stopPropagation();
-  expandedDay = null;
-  expandedPanelStyle = '';
-}
-
 // 展開パネルを閉じる
 function closeExpandedPanel() {
   expandedDay = null;
   expandedPanelStyle = '';
 }
+
+// 展開パネルが開いている間、panel外クリックで閉じるdocumentリスナーを登録
+// overlayを使わないためフォーカスを奪わず、他の要素のDnDも妨げない
+$effect(() => {
+  if (!expandedDay) return;
+
+  const handleOutsideClick = (e: MouseEvent) => {
+    const panel = calendarContentEl?.querySelector('.expanded-panel');
+    if (panel && !panel.contains(e.target as Node)) {
+      closeExpandedPanel();
+    }
+  };
+
+  // パネルを開いたクリック自体を拾わないようにsetTimeoutで遅延登録
+  const id = setTimeout(() => {
+    document.addEventListener('click', handleOutsideClick);
+  }, 0);
+
+  return () => {
+    clearTimeout(id);
+    document.removeEventListener('click', handleOutsideClick);
+  };
+});
 
 // リサイズ開始（複数日バーの左端/右端）
 function handleResizeStart(event: MouseEvent, item: CalendarItem, edge: 'left' | 'right') {
@@ -724,8 +740,6 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     <!-- 展開パネル（calendar-content基準で絶対配置・最前面） -->
     <!-- 隠れていたItemのみ表示。grid-cellの真下にピッタリ配置してセル延長に見せる -->
     {#if expandedDay !== null}
-      <!-- オーバーレイ背景（クリックで閉じる） -->
-      <div class="expanded-panel-overlay" onclick={handlePanelOutsideClick}></div>
       <!-- 展開パネル本体（grid-cellの真下にピッタリ） -->
       <!-- expandedPanelReadyがtrueになるまでvisibility:hiddenで隠す（位置ずれ一瞬表示を防ぐ） -->
       <div class="expanded-panel" style="{expandedPanelStyle}; visibility: {expandedPanelReady ? 'visible' : 'hidden'}">
@@ -931,11 +945,6 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
   }
   
   .calendar-content.dragging-active .month-item:not(.dragging) {
-    pointer-events: none;
-  }
-
-  /* ドラッグ中はオーバーレイを透過させてドロップ先のcellにイベントを届ける */
-  .calendar-content.dragging-active .expanded-panel-overlay {
     pointer-events: none;
   }
 
@@ -1307,13 +1316,6 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
    * - box-shadowは左・右・下のみ（上はgrid-cellと繋がるので不要）
    * - border-topはなし（grid-cellの下端と隙間なく繋がる）
    */
-  .expanded-panel-overlay {
-    position: absolute;
-    inset: 0;
-    z-index: 99;
-    cursor: default;
-  }
-
   .expanded-panel {
     position: absolute;
     z-index: 100;
