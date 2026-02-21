@@ -2,7 +2,7 @@
  * majorTick/minorTickと現在時刻線のE2Eテスト
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from './test-base';
 
 test.describe('majorTick と minorTick', () => {
   test.beforeEach(async ({ page }) => {

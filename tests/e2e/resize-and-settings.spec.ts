@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './test-base';
 
 test.describe('リサイズと設定機能のテスト', () => {
   test.beforeEach(async ({ page }) => {

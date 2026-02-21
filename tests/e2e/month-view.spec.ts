@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './test-base';
 
 /**
  * MonthView E2Eテスト
@@ -1037,6 +1037,72 @@ test.describe('MonthView - DnD機能', () => {
     }
 
     console.log('[PASS] expanded-panel position is updated after allday-item move');
+  });
+});
+
+test.describe('MonthView - 設定パネル', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await page.click('button:has-text("月表示")');
+    await page.waitForSelector('.month-view');
+  });
+
+  test('設定ボタンをクリックすると設定パネルが開くこと', async ({ page }) => {
+    await page.click('.settings-button');
+    await expect(page.locator('.modal-content')).toBeVisible();
+    await expect(page.locator('h2:has-text("月表示の設定")')).toBeVisible();
+  });
+
+  test('土日トグルOFF: JSエラーなし・5列グリッド表示', async ({ page }) => {
+    await page.click('.settings-button');
+    await expect(page.locator('.modal-content')).toBeVisible();
+    const showWeekendCheckbox = page.locator('input[type="checkbox"]').nth(0);
+    await showWeekendCheckbox.uncheck();
+    await page.waitForTimeout(300);
+    const weekdayCells = page.locator('.weekday');
+    await expect(weekdayCells).toHaveCount(5);
+  });
+
+  test('土日トグルOFF→ON: JSエラーなし・7列グリッド表示', async ({ page }) => {
+    await page.click('.settings-button');
+    const showWeekendCheckbox = page.locator('input[type="checkbox"]').nth(0);
+    await showWeekendCheckbox.uncheck();
+    await page.waitForTimeout(200);
+    await showWeekendCheckbox.check();
+    await page.waitForTimeout(300);
+    const weekdayCells = page.locator('.weekday');
+    await expect(weekdayCells).toHaveCount(7);
+  });
+
+  test('終日タスクトグルOFF: JSエラーなし・allday-item非表示', async ({ page }) => {
+    await page.click('.settings-button');
+    const showAllDayCheckbox = page.locator('input[type="checkbox"]').nth(1);
+    await showAllDayCheckbox.uncheck();
+    await page.waitForTimeout(300);
+    const alldayItems = page.locator('.allday-item');
+    await expect(alldayItems).toHaveCount(0);
+  });
+
+  test('単日アイテムトグルOFF: JSエラーなし・single-day-item非表示', async ({ page }) => {
+    await page.click('.settings-button');
+    const showSingleDayCheckbox = page.locator('input[type="checkbox"]').nth(2);
+    await showSingleDayCheckbox.uncheck();
+    await page.waitForTimeout(300);
+    const singleDayItems = page.locator('.single-day-item');
+    await expect(singleDayItems).toHaveCount(0);
+  });
+
+  test('最大表示件数変更: grid-cellの高さが変わること', async ({ page }) => {
+    const cellBefore = await page.locator('.grid-cell').first().boundingBox();
+    expect(cellBefore).toBeTruthy();
+    await page.click('.settings-button');
+    const input = page.locator('input[type="number"]');
+    await input.fill('3');
+    await input.blur();
+    await page.waitForTimeout(300);
+    const cellAfter = await page.locator('.grid-cell').first().boundingBox();
+    expect(cellAfter).toBeTruthy();
+    expect(cellAfter!.height).toBeLessThan(cellBefore!.height);
   });
 });
 

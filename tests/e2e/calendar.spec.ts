@@ -2,7 +2,7 @@
  * カレンダーのE2Eテスト
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from './test-base';
 
 test.describe('Calendar WeekView', () => {
   test.beforeEach(async ({ page }) => {

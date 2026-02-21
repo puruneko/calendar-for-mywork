@@ -132,6 +132,7 @@ let monthMaxItemsPerDay = $state(6);
 let monthWeekStartsOn = $state(1);
 let monthShowWeekend = $state(true);
 let monthShowAllDay = $state(true);
+let monthShowSingleDay = $state(true);
 
 // イベントハンドラ
 function handleItemClick(item: CalendarItem) {
@@ -192,12 +193,14 @@ function handleMonthSettingsChange(settings: {
   weekStartsOn: number;
   showWeekend: boolean;
   showAllDay: boolean;
+  showSingleDay: boolean;
 }) {
   console.debug('MonthView settings changed:', settings);
   monthMaxItemsPerDay = settings.maxItemsPerDay;
   monthWeekStartsOn = settings.weekStartsOn;
   monthShowWeekend = settings.showWeekend;
   monthShowAllDay = settings.showAllDay;
+  monthShowSingleDay = settings.showSingleDay;
 }
 
 function handleCellClick(dateTime: DateTime, clickPosition: { x: number; y: number }) {
@@ -232,6 +235,7 @@ function handleCellClick(dateTime: DateTime, clickPosition: { x: number; y: numb
       monthWeekStartsOn={monthWeekStartsOn}
       monthShowWeekend={monthShowWeekend}
       monthShowAllDay={monthShowAllDay}
+      monthShowSingleDay={monthShowSingleDay}
       onItemClick={handleItemClick}
       onItemMove={handleItemMove}
       onItemResize={handleItemResize}

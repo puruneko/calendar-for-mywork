@@ -8,12 +8,14 @@ interface Props {
   weekStartsOn: number;
   showWeekend: boolean;
   showAllDay: boolean;
+  showSingleDay: boolean;
   onClose: () => void;
   onChange: (settings: {
     maxItemsPerDay: number;
     weekStartsOn: number;
     showWeekend: boolean;
     showAllDay: boolean;
+    showSingleDay: boolean;
   }) => void;
 }
 
@@ -22,6 +24,7 @@ let {
   weekStartsOn = $bindable(1),
   showWeekend = $bindable(true),
   showAllDay = $bindable(true),
+  showSingleDay = $bindable(true),
   onClose,
   onChange,
 }: Props = $props();
@@ -31,6 +34,7 @@ let localMaxItemsPerDay = $state(maxItemsPerDay);
 let localWeekStartsOn = $state(weekStartsOn);
 let localShowWeekend = $state(showWeekend);
 let localShowAllDay = $state(showAllDay);
+let localShowSingleDay = $state(showSingleDay);
 
 // 前回の有効な値を保持
 let lastValidMaxItemsPerDay = $state(maxItemsPerDay);
@@ -61,6 +65,7 @@ function applySettings() {
     weekStartsOn: localWeekStartsOn,
     showWeekend: localShowWeekend,
     showAllDay: localShowAllDay,
+    showSingleDay: localShowSingleDay,
   });
 }
 
@@ -134,6 +139,18 @@ function handleBackdropClick(event: MouseEvent) {
             onchange={handleToggleChange}
           />
           終日タスクを表示する
+        </label>
+      </div>
+
+      <!-- 単日アイテムの表示/非表示 -->
+      <div class="setting-item">
+        <label>
+          <input
+            type="checkbox"
+            bind:checked={localShowSingleDay}
+            onchange={handleToggleChange}
+          />
+          単日アイテムを表示する
         </label>
       </div>
     </div>

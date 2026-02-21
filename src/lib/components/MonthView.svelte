@@ -12,6 +12,7 @@ type Props = {
   weekStartsOn?: number;
   showWeekend?: boolean;
   showAllDay?: boolean;
+  showSingleDay?: boolean;
   onItemClick?: (item: CalendarItem) => void;
   onItemMove?: (item: CalendarItem, newStart: DateTime, newEnd: DateTime) => void;
   onItemResize?: (item: CalendarItem, newStart: DateTime, newEnd: DateTime) => void;
@@ -23,6 +24,7 @@ type Props = {
     weekStartsOn: number;
     showWeekend: boolean;
     showAllDay: boolean;
+    showSingleDay: boolean;
   }) => void;
 };
 
@@ -33,6 +35,7 @@ let {
   weekStartsOn = 1,
   showWeekend = true,
   showAllDay = true,
+  showSingleDay = true,
   onItemClick,
   onItemMove,
   onItemResize,
@@ -182,11 +185,20 @@ function isMultiDayItem(item: CalendarItem): boolean {
   return !itemStart.hasSame(itemEnd, 'day');
 }
 
-// 指定日のアイテムを取得（単日アイテムのみ）
+// 指定日のアイテムを取得（単日アイテムのみ・時間順ソート）
+// timed itemは開始時刻順、allday itemは最後に表示
 function getItemsForDay(day: DateTime): CalendarItem[] {
-  return items.filter(item => {
-    return itemContainsDay(item, day);
-  });
+  return items
+    .filter(item => itemContainsDay(item, day) && !isMultiDayItem(item))
+    .sort((a, b) => {
+      const aStart = getItemStart(a);
+      const bStart = getItemStart(b);
+      // timed itemを先に、allday itemを後に
+      if (isTimed(a) && !isTimed(b)) return -1;
+      if (!isTimed(a) && isTimed(b)) return 1;
+      // 同種なら開始時刻順
+      return (aStart?.toMillis() ?? 0) - (bStart?.toMillis() ?? 0);
+    });
 }
 
 
@@ -741,7 +753,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
   
   // 週の開始日と終了日を取得
   const weekStart = formatDate(week[0]);
-  const weekEnd = formatDate(week[6].plus({ days: 1 })); // exclusive end
+  const weekEnd = formatDate(week[week.length - 1].plus({ days: 1 })); // exclusive end（showWeekend=falseでも正しく動作）
   
   // layoutWeekAllDayアルゴリズムを呼び出し
   const layout = layoutWeekAllDay({
@@ -771,6 +783,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
       {weekStartsOn}
       {showWeekend}
       {showAllDay}
+      {showSingleDay}
       onClose={() => { showSettings = false; }}
       onChange={handleSettingsChange}
     />
@@ -793,15 +806,15 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     <button class="today-button" onclick={goToToday}>Today</button>
   </div>
 
+  <!-- 曜日ヘッダー（calendar-content外に配置して常時表示） -->
+  <div class="weekday-header" style="grid-template-columns: repeat({colsPerWeek}, minmax(0, 1fr));">
+    {#each weekdayHeaders as name}
+      <div class="weekday">{name}</div>
+    {/each}
+  </div>
+
   <!-- カレンダーコンテンツ（スクロール可能） -->
   <div class="calendar-content" class:dragging-active={draggedItem !== null} bind:this={calendarContentEl}>
-
-    <!-- 曜日ヘッダー（weekStartsOn・showWeekend対応） -->
-    <div class="weekday-header" style="grid-template-columns: repeat({colsPerWeek}, minmax(0, 1fr));">
-      {#each weekdayHeaders as name}
-        <div class="weekday">{name}</div>
-      {/each}
-    </div>
 
     <!-- 展開パネル（calendar-content基準で絶対配置・最前面） -->
     <!-- 隠れていたItemのみ表示。grid-cellの真下にピッタリ配置してセル延長に見せる -->
@@ -945,6 +958,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
               >
                 <!-- 通常時: 単日アイテム表示エリア（上限まで） -->
                 <div class="day-items">
+                  {#if showSingleDay}
                   {#each singleDayItems.slice(0, remainingSlots) as item (item.id)}
                     <div
                       class="month-item single-day-item"
@@ -959,10 +973,11 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
                       <span class="item-title">{item.title}</span>
                     </div>
                   {/each}
+                  {/if}
                 </div>
 
                 <!-- day-expanderボタン(open用): オーバーフロー時に下端に表示。展開中は非表示 -->
-                {#if overflowCount > 0 && !expanded}
+                {#if showSingleDay && overflowCount > 0 && !expanded}
                   <button
                     class="day-expander"
                     onclick={(e) => { toggleExpand(e, day); }}

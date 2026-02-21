@@ -26,13 +26,14 @@ type Props = {
   monthWeekStartsOn?: number;
   monthShowWeekend?: boolean;
   monthShowAllDay?: boolean;
+  monthShowSingleDay?: boolean;
   onItemClick?: (item: CalendarItem) => void;
   onItemMove?: (item: CalendarItem, newStart: DateTime, newEnd: DateTime) => void;
   onItemResize?: (item: CalendarItem, newStart: DateTime, newEnd: DateTime) => void;
   onViewChange?: (date: DateTime) => void;
   onCellClick?: (dateTime: DateTime, clickPosition: { x: number; y: number }) => void;
   onSettingsChange?: (settings: any) => void;
-  onMonthSettingsChange?: (settings: { maxItemsPerDay: number; weekStartsOn: number; showWeekend: boolean; showAllDay: boolean; }) => void;
+  onMonthSettingsChange?: (settings: { maxItemsPerDay: number; weekStartsOn: number; showWeekend: boolean; showAllDay: boolean; showSingleDay: boolean; }) => void;
   onViewTypeChange?: (viewType: ViewType) => void;
   onDayClick?: (date: DateTime) => void;
 };
@@ -55,6 +56,7 @@ let {
   monthWeekStartsOn = 1,
   monthShowWeekend = true,
   monthShowAllDay = true,
+  monthShowSingleDay = true,
   onItemClick,
   onItemMove,
   onItemResize,
@@ -132,6 +134,7 @@ function handleDayClick(date: DateTime) {
       weekStartsOn={monthWeekStartsOn}
       showWeekend={monthShowWeekend}
       showAllDay={monthShowAllDay}
+      showSingleDay={monthShowSingleDay}
       {onItemClick}
       {onItemMove}
       {onItemResize}
