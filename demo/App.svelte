@@ -6,7 +6,7 @@
 import { DateTime } from 'luxon';
 import { CalendarView } from '../src/lib/components';
 import type { CalendarItem, Task, Appointment } from '../src/lib/models';
-import { toCalendarDate, createCalendarDateRange } from '../src/lib/models';
+import { toCalendarDate, createCalendarDateRange, validateCalendarItems, diffDays } from '../src/lib/models';
 
 // 基準日（今日）
 const today = DateTime.now().startOf('day');
@@ -142,20 +142,33 @@ function handleItemClick(item: CalendarItem) {
 
 function handleItemMove(item: CalendarItem, newStart: DateTime, newEnd: DateTime) {
   console.debug('Item moved:', item, newStart, newEnd);
-  items = items.map(i =>
-    i.id === item.id
-      ? { ...i, start: newStart, end: newEnd }
-      : i
-  );
+  items = items.map(i => {
+    if (i.id !== item.id) return i;
+    // AllDayアイテム（dateRange）はCalendarDateで更新し、元の期間を保持する
+    if ('dateRange' in i && i.dateRange) {
+      const span = diffDays(i.dateRange);
+      const newStartDate = toCalendarDate(newStart.startOf('day'));
+      const newEndDate = toCalendarDate(newStart.startOf('day').plus({ days: span }));
+      return { ...i, dateRange: createCalendarDateRange(newStartDate, newEndDate) };
+    }
+    // TimedアイテムはDateTimeで更新
+    return { ...i, start: newStart, end: newEnd };
+  });
 }
 
 function handleItemResize(item: CalendarItem, newStart: DateTime, newEnd: DateTime) {
   console.debug('Item resized:', item, newStart, newEnd);
-  items = items.map(i =>
-    i.id === item.id
-      ? { ...i, start: newStart, end: newEnd }
-      : i
-  );
+  items = items.map(i => {
+    if (i.id !== item.id) return i;
+    // AllDayアイテム（dateRange）はCalendarDateで更新
+    if ('dateRange' in i && i.dateRange) {
+      const newStartDate = toCalendarDate(newStart.startOf('day'));
+      const newEndDate = toCalendarDate(newEnd.startOf('day'));
+      return { ...i, dateRange: createCalendarDateRange(newStartDate, newEndDate) };
+    }
+    // TimedアイテムはDateTimeで更新
+    return { ...i, start: newStart, end: newEnd };
+  });
 }
 
 function handleViewChange(newDate: DateTime) {
@@ -187,6 +200,11 @@ function handleSettingsChange(settings: {
   showParent = settings.showParent;
   parentDisplayIndex = settings.parentDisplayIndex;
 }
+
+// items変化時に自動バリデーション（不正データをコンソールに出力）
+$effect(() => {
+  validateCalendarItems(items);
+});
 
 function handleMonthSettingsChange(settings: {
   maxItemsPerDay: number;

@@ -9,4 +9,6 @@ export type { CalendarDate } from './calendarDate';
 export { toCalendarDate, parseCalendarDate } from './calendarDate';
 export type { CalendarDateRange } from './calendarDateRange';
 export { createCalendarDateRange } from './calendarDateRange';
+export type { ValidationError, ValidationResult } from './validation';
+export { validateCalendarItem, validateCalendarItems } from './validation';
 export { diffDays, containsDate, overlaps, toStartDateTime, toEndDateTime } from './calendarDateRangeOps';
