@@ -161,6 +161,11 @@ function getItemsForDay(day: DateTime): CalendarItem[] {
   return items.filter(item => {
     // AllDayアイテムは除外（別レーンで表示）
     if (!isTimed(item)) return false;
+    // 時刻付きでも複数日にまたがるアイテムはWeekViewのグリッドには表示しない
+    // （height計算が何千pxにもなりUIが破綻するため。dateRangeで定義すべき）
+    const itemStart = getItemStart(item);
+    const itemEnd = getItemEnd(item);
+    if (itemStart && itemEnd && !itemStart.hasSame(itemEnd.minus({ seconds: 1 }), 'day')) return false;
     return itemContainsDay(item, day);
   });
 }

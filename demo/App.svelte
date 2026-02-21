@@ -97,11 +97,11 @@ let items = $state<CalendarItem[]>([
   { id: 'ff8', type: 'appointment', title: '来月の外部監査', start: d(30).set({ hour: 10, minute: 0 }), end: d(30).set({ hour: 17, minute: 0 }) } as Appointment,
 
   // 複数日またがり (timed)
-  { id: 'm1', type: 'task', title: '3日間ワークショップ', start: d(1).set({ hour: 9, minute: 0 }), end: d(3).set({ hour: 17, minute: 0 }), status: 'doing', parents: ['研修プログラム'] } as Task,
-  { id: 'm2', type: 'appointment', title: '出張（大阪）', start: d(5).set({ hour: 8, minute: 0 }), end: d(7).set({ hour: 20, minute: 0 }), parents: ['営業活動'] } as Appointment,
-  { id: 'm3', type: 'task', title: '週またぎ開発タスク', start: d(-2).set({ hour: 9, minute: 0 }), end: d(2).set({ hour: 18, minute: 0 }), status: 'doing', parents: ['機能開発Sprint#5'] } as Task,
-  { id: 'm4', type: 'appointment', title: '展示会参加', start: d(19).set({ hour: 9, minute: 0 }), end: d(21).set({ hour: 18, minute: 0 }) } as Appointment,
-  { id: 'm5', type: 'task', title: '月またぎプロジェクト', start: d(28).set({ hour: 9, minute: 0 }), end: d(33).set({ hour: 18, minute: 0 }), status: 'todo', parents: ['Q2計画', '大型案件'] } as Task,
+  { id: 'm1', type: 'task', title: '3日間ワークショップ', dateRange: createCalendarDateRange(toCalendarDate(d(1)), toCalendarDate(d(3))), status: 'doing', parents: ['研修プログラム'] } as Task,
+  { id: 'm2', type: 'appointment', title: '出張（大阪）', dateRange: createCalendarDateRange(toCalendarDate(d(5)), toCalendarDate(d(7))), parents: ['営業活動'] } as Appointment,
+  { id: 'm3', type: 'task', title: '週またぎ開発タスク', dateRange: createCalendarDateRange(toCalendarDate(d(-2)), toCalendarDate(d(2))), status: 'doing', parents: ['機能開発Sprint#5'] } as Task,
+  { id: 'm4', type: 'appointment', title: '展示会参加', dateRange: createCalendarDateRange(toCalendarDate(d(19)), toCalendarDate(d(21))) } as Appointment,
+  { id: 'm5', type: 'task', title: '月またぎプロジェクト', dateRange: createCalendarDateRange(toCalendarDate(d(28)), toCalendarDate(d(33))), status: 'todo', parents: ['Q2計画', '大型案件'] } as Task,
 
   // 同一日に多数（+1日: expanded-panel確認用）
   { id: 'e1', type: 'task', title: '朝のスタンドアップ', start: d(1).set({ hour: 9, minute: 0 }), end: d(1).set({ hour: 9, minute: 15 }), status: 'done' } as Task,
