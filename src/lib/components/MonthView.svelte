@@ -806,15 +806,15 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     <button class="today-button" onclick={goToToday}>Today</button>
   </div>
 
-  <!-- 曜日ヘッダー（calendar-content外に配置して常時表示） -->
+  <!-- カレンダーコンテンツ（スクロール可能） -->
+  <div class="calendar-content" class:dragging-active={draggedItem !== null} bind:this={calendarContentEl}>
+
+  <!-- 曜日ヘッダー（calendar-content内でsticky配置 → スクロールバー幅が同じなので列幅が完全同期） -->
   <div class="weekday-header" style="grid-template-columns: repeat({colsPerWeek}, minmax(0, 1fr));">
     {#each weekdayHeaders as name}
       <div class="weekday">{name}</div>
     {/each}
   </div>
-
-  <!-- カレンダーコンテンツ（スクロール可能） -->
-  <div class="calendar-content" class:dragging-active={draggedItem !== null} bind:this={calendarContentEl}>
 
     <!-- 展開パネル（calendar-content基準で絶対配置・最前面） -->
     <!-- 隠れていたItemのみ表示。grid-cellの真下にピッタリ配置してセル延長に見せる -->
@@ -996,7 +996,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     </div>
 
   </div>
-  
+
 </div>
 
 <style>
@@ -1124,8 +1124,15 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     grid-template-columns: repeat(7, minmax(0, 1fr)); /* デフォルト: 7列（インラインで上書き） */
   }
 
-  /* 曜日ヘッダー */
+  /* 曜日ヘッダー
+   * calendar-content内でsticky配置することでスクロール時も常時表示され、
+   * かつ本体グリッドとスクロールバー幅を共有するため列幅が完全に同期する。
+   */
   .weekday-header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background-color: white;
     border-bottom: 1px solid #e0e0e0;
   }
 
