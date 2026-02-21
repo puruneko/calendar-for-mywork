@@ -10,6 +10,7 @@ type Props = {
   items?: CalendarItem[];
   currentDate?: DateTime;
   viewType?: ViewType;
+  // WeekView用設定
   startHour?: number;
   endHour?: number;
   minorTick?: number;
@@ -20,12 +21,18 @@ type Props = {
   itemRightMargin?: number;
   showParent?: boolean;
   parentDisplayIndex?: number;
+  // MonthView専用設定
+  monthMaxItemsPerDay?: number;
+  monthWeekStartsOn?: number;
+  monthShowWeekend?: boolean;
+  monthShowAllDay?: boolean;
   onItemClick?: (item: CalendarItem) => void;
   onItemMove?: (item: CalendarItem, newStart: DateTime, newEnd: DateTime) => void;
   onItemResize?: (item: CalendarItem, newStart: DateTime, newEnd: DateTime) => void;
   onViewChange?: (date: DateTime) => void;
   onCellClick?: (dateTime: DateTime, clickPosition: { x: number; y: number }) => void;
   onSettingsChange?: (settings: any) => void;
+  onMonthSettingsChange?: (settings: { maxItemsPerDay: number; weekStartsOn: number; showWeekend: boolean; showAllDay: boolean; }) => void;
   onViewTypeChange?: (viewType: ViewType) => void;
   onDayClick?: (date: DateTime) => void;
 };
@@ -44,12 +51,17 @@ let {
   itemRightMargin = 10,
   showParent = true,
   parentDisplayIndex = -1,
+  monthMaxItemsPerDay = 6,
+  monthWeekStartsOn = 1,
+  monthShowWeekend = true,
+  monthShowAllDay = true,
   onItemClick,
   onItemMove,
   onItemResize,
   onViewChange,
   onCellClick,
   onSettingsChange,
+  onMonthSettingsChange,
   onViewTypeChange,
   onDayClick,
 }: Props = $props();
@@ -116,12 +128,17 @@ function handleDayClick(date: DateTime) {
     <MonthView
       {items}
       {currentDate}
+      maxItemsPerDay={monthMaxItemsPerDay}
+      weekStartsOn={monthWeekStartsOn}
+      showWeekend={monthShowWeekend}
+      showAllDay={monthShowAllDay}
       {onItemClick}
       {onItemMove}
       {onItemResize}
       {onViewChange}
       {onCellClick}
       onDayClick={handleDayClick}
+      onSettingsChange={onMonthSettingsChange}
     />
   {/if}
 </div>

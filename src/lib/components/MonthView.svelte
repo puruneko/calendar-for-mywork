@@ -3,28 +3,57 @@ import { DateTime } from 'luxon';
 import { tick } from 'svelte';
 import type { CalendarItem } from '../models';
 import { formatTime, getItemStart, getItemEnd, itemContainsDay, isTimed, layoutWeekAllDay, type AllDayItem, formatDate } from '../utils';
+import MonthSettingsModal from './MonthSettingsModal.svelte';
 
 type Props = {
   items?: CalendarItem[];
   currentDate?: DateTime;
+  maxItemsPerDay?: number;
+  weekStartsOn?: number;
+  showWeekend?: boolean;
+  showAllDay?: boolean;
   onItemClick?: (item: CalendarItem) => void;
   onItemMove?: (item: CalendarItem, newStart: DateTime, newEnd: DateTime) => void;
   onItemResize?: (item: CalendarItem, newStart: DateTime, newEnd: DateTime) => void;
   onViewChange?: (date: DateTime) => void;
   onCellClick?: (dateTime: DateTime, clickPosition: { x: number; y: number }) => void;
   onDayClick?: (date: DateTime) => void;
+  onSettingsChange?: (settings: {
+    maxItemsPerDay: number;
+    weekStartsOn: number;
+    showWeekend: boolean;
+    showAllDay: boolean;
+  }) => void;
 };
 
 let {
   items = [],
   currentDate = DateTime.now(),
+  maxItemsPerDay = 6,
+  weekStartsOn = 1,
+  showWeekend = true,
+  showAllDay = true,
   onItemClick,
   onItemMove,
   onItemResize,
   onViewChange,
   onCellClick,
   onDayClick,
+  onSettingsChange,
 }: Props = $props();
+
+// 設定モーダルの表示状態
+let showSettings = $state(false);
+
+// 設定変更ハンドラ
+function handleSettingsChange(settings: {
+  maxItemsPerDay: number;
+  weekStartsOn: number;
+  showWeekend: boolean;
+  showAllDay: boolean;
+}) {
+  onSettingsChange?.(settings);
+}
 
 // セル展開状態（展開されている日を保持）
 let expandedDay: DateTime | null = $state(null);
@@ -52,10 +81,12 @@ let expandedHiddenItems = $derived.by(() => {
     ? Math.max(...multiDayItemsForThisDay.map(item => item.lane))
     : -1;
   const multiDayCountForThisDay = maxLane + 1;
-  const remainingSlots = Math.max(0, MAX_ITEMS_PER_DAY - multiDayCountForThisDay);
+  const remainingSlots = Math.max(0, maxItemsPerDay - multiDayCountForThisDay);
   // expandedDay の単日アイテムのうち上限を超えた分を返す
+  // showAllDay=falseの場合はmultiDayItemは非表示のためremainingSlots=maxItemsPerDay
+  const effectiveRemainingSlots = showAllDay ? remainingSlots : maxItemsPerDay;
   const singleDayItems = items.filter(item => itemContainsDay(item, expandedDay!) && !isMultiDayItem(item));
-  return singleDayItems.slice(remainingSlots);
+  return singleDayItems.slice(effectiveRemainingSlots);
 });
 
 // DnD状態
@@ -70,57 +101,77 @@ let resizeEdge = $state<'left' | 'right' | null>(null);
 let resizeStartX = $state<number>(0);
 let resizeStartDay = $state<DateTime | null>(null);
 
-// 1日あたりの最大表示アイテム数（通常時）
-// grid-cell の固定高さ = ITEMS_PER_DAY * ITEM_ROW_HEIGHT (px)
-const MAX_ITEMS_PER_DAY = 6;
+// 1日あたりの最大表示アイテム数（通常時）はpropsから受け取る
+// grid-cell の固定高さ = maxItemsPerDay * ITEM_ROW_HEIGHT (px)
 const ITEM_ROW_HEIGHT = 20; // px（single-day-item 1行の高さ）
-const GRID_CELL_HEIGHT = MAX_ITEMS_PER_DAY * ITEM_ROW_HEIGHT; // 120px 固定
+let GRID_CELL_HEIGHT = $derived(maxItemsPerDay * ITEM_ROW_HEIGHT);
 
 // 月の全ての日付を取得（前月・翌月の日も含む）
-function getMonthDays(date: DateTime): DateTime[] {
+// weekStartsOn: 1=月曜、7=日曜
+function getMonthDays(date: DateTime, startDay: number): DateTime[] {
   const startOfMonth = date.startOf('month');
   const endOfMonth = date.endOf('month');
-  
-  // 月初の曜日（週の何日目か）
-  const startWeekday = startOfMonth.weekday; // 1=月曜、7=日曜
-  
-  // カレンダー表示開始日（月曜始まり）
-  // 1日が月曜の場合は前月の最終週から開始
-  const calendarStart = startOfMonth.minus({ days: startWeekday - 1 });
-  
+
+  // 月初の曜日（1=月曜、7=日曜）
+  const startWeekday = startOfMonth.weekday;
+  // 週始まりからのオフセット（0〜6）
+  const offset = (startWeekday - startDay + 7) % 7;
+  const calendarStart = startOfMonth.minus({ days: offset });
+
   // 月末の曜日
-  const endWeekday = endOfMonth.weekday; // 1=月曜、7=日曜
-  
-  // カレンダー表示終了日（その週の日曜日）
-  // まずその週の日曜日を求める（日単位で計算）
-  const thisWeekSunday = endOfMonth.startOf('day').plus({ days: 7 - endWeekday });
-  
-  // 月末が日曜の場合は、翌週の日曜日まで
-  const calendarEnd = endWeekday === 7 
-    ? endOfMonth.startOf('day').plus({ days: 7 })
-    : thisWeekSunday;
-  
-  // 日数を計算（開始日から終了日まで、両端を含む）
+  const endWeekday = endOfMonth.weekday;
+  // 週末（週の最後の曜日）= startDay - 1（循環）
+  const endDay = ((startDay - 2 + 7) % 7) + 1; // startDay の前の曜日
+  const endOffset = (endDay - endWeekday + 7) % 7;
+  const calendarEnd = endOfMonth.startOf('day').plus({ days: endOffset === 0 ? 7 : endOffset });
+
   const dayCount = Math.floor(calendarEnd.diff(calendarStart, 'days').days) + 1;
-  
+
   const days: DateTime[] = [];
   for (let i = 0; i < dayCount; i++) {
     days.push(calendarStart.plus({ days: i }));
   }
-  
+
   return days;
 }
 
-let monthDays = $derived(getMonthDays(currentDate));
+let monthDays = $derived(getMonthDays(currentDate, weekStartsOn));
 
-// 週ごとにグループ化
+// 週ごとにグループ化（showWeekendがfalseの場合は土日を除外）
 let weeks = $derived.by(() => {
   const result: DateTime[][] = [];
-  const weekCount = Math.ceil(monthDays.length / 7);
-  for (let i = 0; i < weekCount; i++) {
-    result.push(monthDays.slice(i * 7, (i + 1) * 7));
+  const allDays = monthDays;
+  // showWeekendがfalseなら土日(weekday 6=土, 7=日)を除外
+  const colsPerRow = showWeekend ? 7 : 5;
+  // 週ごとに分割（7日ずつ取得してからフィルタ）
+  const rawWeekCount = Math.ceil(allDays.length / 7);
+  for (let i = 0; i < rawWeekCount; i++) {
+    const rawWeek = allDays.slice(i * 7, (i + 1) * 7);
+    const week = showWeekend
+      ? rawWeek
+      : rawWeek.filter(d => d.weekday >= 1 && d.weekday <= 5);
+    if (week.length > 0) result.push(week);
   }
   return result;
+});
+
+// 週あたりの列数（土日表示に依存）
+let colsPerWeek = $derived(showWeekend ? 7 : 5);
+
+// 表示する曜日ヘッダー
+let weekdayHeaders = $derived.by(() => {
+  // weekStartsOnから始まる曜日名を生成
+  const names = ['月', '火', '水', '木', '金', '土', '日'];
+  // 1=月曜(index 0)、7=日曜(index 6)
+  const ordered: string[] = [];
+  for (let i = 0; i < 7; i++) {
+    const dayIndex = ((weekStartsOn - 1 + i) % 7);
+    ordered.push(names[dayIndex]);
+  }
+  return showWeekend ? ordered : ordered.filter((_, i) => {
+    const dayIndex = ((weekStartsOn - 1 + i) % 7);
+    return dayIndex < 5; // 月〜金のみ
+  });
 });
 
 // 日をまたがるアイテムかどうかを判定
@@ -713,9 +764,28 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
 </script>
 
 <div class="month-view">
+  <!-- 設定モーダル -->
+  {#if showSettings}
+    <MonthSettingsModal
+      {maxItemsPerDay}
+      {weekStartsOn}
+      {showWeekend}
+      {showAllDay}
+      onClose={() => { showSettings = false; }}
+      onChange={handleSettingsChange}
+    />
+  {/if}
+
   <!-- ヘッダー -->
   <div class="month-header">
     <div class="header-left">
+      <button class="settings-button" onclick={() => { showSettings = !showSettings; }} title="設定">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M12 1v6m0 6v6M1 12h6m6 0h6"/>
+          <path d="m4.93 4.93 4.24 4.24m5.66 5.66 4.24 4.24M4.93 19.07l4.24-4.24m5.66-5.66 4.24-4.24"/>
+        </svg>
+      </button>
       <button class="nav-button" onclick={prevMonth}>&lt;</button>
       <h2 class="month-title">{currentDate.toFormat('yyyy年M月')}</h2>
       <button class="nav-button" onclick={nextMonth}>&gt;</button>
@@ -726,15 +796,11 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
   <!-- カレンダーコンテンツ（スクロール可能） -->
   <div class="calendar-content" class:dragging-active={draggedItem !== null} bind:this={calendarContentEl}>
 
-    <!-- 曜日ヘッダー（固定列グリッド） -->
-    <div class="weekday-header">
-      <div class="weekday">月</div>
-      <div class="weekday">火</div>
-      <div class="weekday">水</div>
-      <div class="weekday">木</div>
-      <div class="weekday">金</div>
-      <div class="weekday">土</div>
-      <div class="weekday">日</div>
+    <!-- 曜日ヘッダー（weekStartsOn・showWeekend対応） -->
+    <div class="weekday-header" style="grid-template-columns: repeat({colsPerWeek}, minmax(0, 1fr));">
+      {#each weekdayHeaders as name}
+        <div class="weekday">{name}</div>
+      {/each}
     </div>
 
     <!-- 展開パネル（calendar-content基準で絶対配置・最前面） -->
@@ -779,10 +845,10 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
         {@const alldayHeight = laneCount * 24}
 
         <!-- Week: single CSS Grid row containing 3-layer stack -->
-        <div class="week-stack" style="--allday-height: {alldayHeight}px; --lane-count: {laneCount}; --grid-cell-height: {GRID_CELL_HEIGHT}px">
+        <div class="week-stack" style="--allday-height: {showAllDay ? alldayHeight : 0}px; --lane-count: {showAllDay ? laneCount : 0}; --grid-cell-height: {GRID_CELL_HEIGHT}px; --cols: {colsPerWeek};">
 
-          <!-- Layer 1: Week Chrome (date numbers) - grid of 7 -->
-          <div class="week-chrome">
+          <!-- Layer 1: Week Chrome (date numbers) - grid of colsPerWeek -->
+          <div class="week-chrome" style="grid-template-columns: repeat({colsPerWeek}, minmax(0, 1fr));">
             {#each week as day}
               {@const isToday = day.hasSame(DateTime.now(), 'day')}
               {@const isCurrentMonth = day.hasSame(currentDate, 'month')}
@@ -809,7 +875,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
           <div class="week-allday">
             <!-- 縦罫線用の透明グリッド（week-gridと同じ列幅） -->
             <!-- allday-grid-line-cellがDnDドロップ先を担当（allday-item不在セルへのDnD対応） -->
-            <div class="allday-grid-lines">
+            <div class="allday-grid-lines" style="grid-template-columns: repeat({colsPerWeek}, minmax(0, 1fr));">
               {#each week as _, i}
                 <div
                   class="allday-grid-line-cell"
@@ -820,6 +886,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
                 ></div>
               {/each}
             </div>
+            {#if showAllDay}
             {#each multiDayItemsInWeek as {item, startIndex, span, lane}}
               <div
                 class="allday-item"
@@ -848,17 +915,18 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
                 ></div>
               </div>
             {/each}
+            {/if}
           </div>
 
-          <!-- Layer 3: Day Grid (single-day items) - grid of 7 -->
-          <div class="week-grid">
+          <!-- Layer 3: Day Grid (single-day items) - grid of colsPerWeek -->
+          <div class="week-grid" style="grid-template-columns: repeat({colsPerWeek}, minmax(0, 1fr));">
             {#each week as day}
               {@const singleDayItems = getItemsForDay(day).filter(item => !isMultiDayItem(item))}
               {@const dayIndex = week.indexOf(day)}
               {@const multiDayItemsForThisDay = multiDayItemsInWeek.filter(({startIndex, span}) => dayIndex >= startIndex && dayIndex < startIndex + span)}
               {@const maxLane = multiDayItemsForThisDay.length > 0 ? Math.max(...multiDayItemsForThisDay.map(item => item.lane)) : -1}
-              {@const multiDayCountForThisDay = maxLane + 1}
-              {@const remainingSlots = Math.max(0, MAX_ITEMS_PER_DAY - multiDayCountForThisDay)}
+              {@const multiDayCountForThisDay = showAllDay ? (maxLane + 1) : 0}
+              {@const remainingSlots = Math.max(0, maxItemsPerDay - multiDayCountForThisDay)}
               {@const displayedSingleDayCount = Math.min(remainingSlots, singleDayItems.length)}
               {@const totalDisplayedCount = displayedSingleDayCount + multiDayCountForThisDay}
               {@const totalItemsCount = singleDayItems.length + multiDayCountForThisDay}
@@ -977,6 +1045,24 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     margin: 0;
   }
 
+  .settings-button {
+    background: none;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 7px 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #555;
+  }
+
+  .settings-button:hover {
+    background-color: #e3f2fd;
+    border-color: #2196f3;
+    color: #2196f3;
+  }
+
   .nav-button {
     background: none;
     border: 1px solid #ccc;
@@ -1014,12 +1100,13 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
    * <table> は列幅の計算が各行独立なので廃止した。
    */
 
-  /* 7列グリッドのテンプレート（共通定義） */
+  /* グリッドのテンプレート（共通定義） */
+  /* grid-template-columnsはcolsPerWeek(5 or 7)によりインラインstyleで上書き */
   .weekday-header,
   .week-chrome,
   .week-grid {
     display: grid;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
+    grid-template-columns: repeat(7, minmax(0, 1fr)); /* デフォルト: 7列（インラインで上書き） */
   }
 
   /* 曜日ヘッダー */
@@ -1166,10 +1253,10 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     position: absolute;
     /* topはlane番号 × 1行高さ(24px) */
     top: calc(var(--lane) * 24px);
-    /* leftは開始インデックス × セル幅(1/7) */
-    left: calc(var(--start-index) / 7 * 100%);
-    /* widthはspan × セル幅(1/7) */
-    width: calc(var(--span) / 7 * 100%);
+    /* leftは開始インデックス × セル幅(1/cols) + 左余白4px */
+    left: calc(var(--start-index) / var(--cols, 7) * 100% + 4px);
+    /* widthはspan × セル幅(1/cols) - 左右余白8px */
+    width: calc(var(--span) / var(--cols, 7) * 100% - 8px);
     height: 22px;
     padding: 0;
     font-size: 11px;
@@ -1244,10 +1331,10 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     /* 縦の罫線のみ（左）。横線はweek-stackのborder-topで担当 */
     border-left: 1px solid #e0e0e0;
     padding: 4px;
-    /* 全週で同じ高さに固定（Item 6個分 = 120px） */
+    /* 全週で同じ高さに固定（maxItemsPerDay個分） */
     height: var(--grid-cell-height, 120px);
     overflow: hidden;
-    cursor: pointer;
+    cursor: default;
     position: relative;
     box-sizing: border-box;
   }

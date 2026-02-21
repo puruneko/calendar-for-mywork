@@ -593,10 +593,10 @@ test.describe('MonthView - 複数日にまたがるアイテム', () => {
   test('3日間のワークショップが3日間連続でバー表示されること', async ({ page }) => {
     console.log('[TEST] 3日間のワークショップが3日間連続でバー表示されることを確認');
     console.log('[REASON] 複数日アイテムが週内で連続したバーとして表示される必要がある');
-    console.log('[STEP 1] "3日間のワークショップ"アイテムを探す');
+    console.log('[STEP 1] "3日間ワークショップ"アイテムを探す');
 
     // 新3層構造では .allday-item クラスを使用
-    const workshopBars = page.locator('.allday-item:has-text("3日間のワークショップ")');
+    const workshopBars = page.locator('.allday-item:has-text("3日間ワークショップ")');
     const workshopCount = await workshopBars.count();
     
     console.log(`[INFO] Found ${workshopCount} "3日間のワークショップ" bars`);
