@@ -12,3 +12,9 @@ export { createCalendarDateRange } from './calendarDateRange';
 export type { ValidationError, ValidationResult } from './validation';
 export { validateCalendarItem, validateCalendarItems } from './validation';
 export { diffDays, containsDate, overlaps, toStartDateTime, toEndDateTime } from './calendarDateRangeOps';
+export type { CalendarItemParams } from './factories';
+export {
+  createCalendarItem,
+  updateTimedItem,
+  updateAllDayItem,
+} from './factories';

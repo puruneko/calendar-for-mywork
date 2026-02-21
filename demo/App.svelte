@@ -5,111 +5,107 @@
 
 import { DateTime } from 'luxon';
 import { CalendarView } from '../src/lib/components';
-import type { CalendarItem, Task, Appointment } from '../src/lib/models';
-import { toCalendarDate, createCalendarDateRange, validateCalendarItems, diffDays } from '../src/lib/models';
+import type { CalendarItem } from '../src/lib/models';
+import {
+  toCalendarDate, createCalendarDateRange, validateCalendarItems, diffDays,
+  createCalendarItem,
+  updateTimedItem, updateAllDayItem,
+} from '../src/lib/models';
 
 // 基準日（今日）
 const today = DateTime.now().startOf('day');
 const d = (offset: number) => today.plus({ days: offset });
 
-// サンプルデータ（100件: 今日を中心に前後1ヶ月、各パターンを網羅）
+// サンプルデータ（今日を中心に前後1ヶ月、各パターンを網羅）
+// 全アイテムは必ず生成関数を通して作成すること（バリデーション自動実行）
 let items = $state<CalendarItem[]>([
   // ===== 今日 =====
-  {
-    id: '1',
-    type: 'task',
-    title: 'プロジェクト企画書作成',
-    start: d(0).set({ hour: 9, minute: 0 }),
-    end: d(0).set({ hour: 12, minute: 0 }),
-    status: 'doing',
-    parents: ['新規事業プロジェクト', '企画フェーズ'],
-  } as Task,
-  // 今日（オーバーフロー確認用: 10件）
-  { id: '2', type: 'task', title: 'コードレビュー', start: d(0).set({ hour: 10, minute: 0 }), end: d(0).set({ hour: 11, minute: 0 }), status: 'todo', parents: ['機能開発Sprint#5', 'QA'] } as Task,
-  { id: '3', type: 'appointment', title: 'チームミーティング', start: d(0).set({ hour: 11, minute: 0 }), end: d(0).set({ hour: 12, minute: 0 }), parents: ['週次定例会'] } as Appointment,
-  { id: '4', type: 'task', title: '要件定義書レビュー', start: d(0).set({ hour: 13, minute: 0 }), end: d(0).set({ hour: 14, minute: 0 }), status: 'doing', parents: ['A社案件', '要件定義フェーズ'] } as Task,
-  { id: '5', type: 'task', title: 'バグ修正#1234', start: d(0).set({ hour: 14, minute: 0 }), end: d(0).set({ hour: 15, minute: 0 }), status: 'doing', parents: ['機能開発Sprint#5'] } as Task,
-  { id: '6', type: 'appointment', title: '部署会議', start: d(0).set({ hour: 15, minute: 0 }), end: d(0).set({ hour: 16, minute: 0 }) } as Appointment,
-  { id: '7', type: 'task', title: '週報作成', start: d(0).set({ hour: 16, minute: 0 }), end: d(0).set({ hour: 16, minute: 30 }), status: 'todo' } as Task,
-  { id: '8', type: 'task', title: 'メール返信', start: d(0).set({ hour: 16, minute: 30 }), end: d(0).set({ hour: 17, minute: 0 }), status: 'todo' } as Task,
-  { id: '9', type: 'appointment', title: '1on1ミーティング', start: d(0).set({ hour: 17, minute: 0 }), end: d(0).set({ hour: 17, minute: 30 }) } as Appointment,
-  { id: '10', type: 'task', title: '夕会', start: d(0).set({ hour: 18, minute: 0 }), end: d(0).set({ hour: 18, minute: 30 }), status: 'todo' } as Task,
-  
+  createCalendarItem({ type: 'task', id: '1', title: 'プロジェクト企画書作成', start: d(0).set({ hour: 9 }), end: d(0).set({ hour: 12 }), status: 'doing', parents: ['新規事業プロジェクト', '企画フェーズ'] }),
+  createCalendarItem({ type: 'task', id: '2', title: 'コードレビュー', start: d(0).set({ hour: 10 }), end: d(0).set({ hour: 11 }), status: 'todo', parents: ['機能開発Sprint#5', 'QA'] }),
+  createCalendarItem({ type: 'appointment', id: '3', title: 'チームミーティング', start: d(0).set({ hour: 11 }), end: d(0).set({ hour: 12 }), parents: ['週次定例会'] }),
+  createCalendarItem({ type: 'task', id: '4', title: '要件定義書レビュー', start: d(0).set({ hour: 13 }), end: d(0).set({ hour: 14 }), status: 'doing', parents: ['A社案件', '要件定義フェーズ'] }),
+  createCalendarItem({ type: 'task', id: '5', title: 'バグ修正#1234', start: d(0).set({ hour: 14 }), end: d(0).set({ hour: 15 }), status: 'doing', parents: ['機能開発Sprint#5'] }),
+  createCalendarItem({ type: 'appointment', id: '6', title: '部署会議', start: d(0).set({ hour: 15 }), end: d(0).set({ hour: 16 }) }),
+  createCalendarItem({ type: 'task', id: '7', title: '週報作成', start: d(0).set({ hour: 16 }), end: d(0).set({ hour: 16, minute: 30 }), status: 'todo' }),
+  createCalendarItem({ type: 'task', id: '8', title: 'メール返信', start: d(0).set({ hour: 16, minute: 30 }), end: d(0).set({ hour: 17 }), status: 'todo' }),
+  createCalendarItem({ type: 'appointment', id: '9', title: '1on1ミーティング', start: d(0).set({ hour: 17 }), end: d(0).set({ hour: 17, minute: 30 }) }),
+  createCalendarItem({ type: 'task', id: '10', title: '夕会', start: d(0).set({ hour: 18 }), end: d(0).set({ hour: 18, minute: 30 }), status: 'todo' }),
+
   // ===== カスタムスタイル =====
-  { id: 'c1', type: 'task', title: 'カスタム: 赤背景', start: d(0).set({ hour: 8, minute: 0 }), end: d(0).set({ hour: 9, minute: 0 }), status: 'todo', style: { backgroundColor: '#ff5252', color: '#fff', fontWeight: 'bold' } } as Task,
-  { id: 'c2', type: 'task', title: 'カスタム: 緑+斜体', start: d(1).set({ hour: 13, minute: 0 }), end: d(1).set({ hour: 14, minute: 30 }), status: 'doing', style: { backgroundColor: '#4caf50', color: '#fff', fontStyle: 'italic', borderRadius: '8px' } } as Task,
-  { id: 'c3', type: 'appointment', title: 'カスタム: 青+影', start: d(1).set({ hour: 15, minute: 30 }), end: d(1).set({ hour: 17, minute: 0 }), style: { backgroundColor: 'rgb(33,150,243)', color: '#fff', border: '2px solid #1976d2' } } as Appointment,
-  { id: 'c4', type: 'task', title: 'カスタム: グラデーション', start: d(2).set({ hour: 9, minute: 0 }), end: d(2).set({ hour: 10, minute: 30 }), status: 'done', style: { background: 'linear-gradient(135deg,#667eea,#764ba2)', color: '#fff', fontWeight: '600', borderRadius: '12px' } } as Task,
-  { id: 'c5', type: 'appointment', title: 'カスタム: オレンジ点線', start: d(3).set({ hour: 14, minute: 0 }), end: d(3).set({ hour: 15, minute: 30 }), style: { backgroundColor: '#ff9800', color: '#333', border: '3px dotted #f57c00' } } as Appointment,
-  { id: 'c6', type: 'task', title: 'カスタム: 透明度指定済み', start: d(2).set({ hour: 11, minute: 0 }), end: d(2).set({ hour: 12, minute: 0 }), status: 'todo', style: { backgroundColor: 'rgba(156,39,176,0.9)', color: '#fff', textDecoration: 'underline' } } as Task,
+  createCalendarItem({ type: 'task', id: 'c1', title: 'カスタム: 赤背景', start: d(0).set({ hour: 8 }), end: d(0).set({ hour: 9 }), status: 'todo', style: { backgroundColor: '#ff5252', color: '#fff', fontWeight: 'bold' } }),
+  createCalendarItem({ type: 'task', id: 'c2', title: 'カスタム: 緑+斜体', start: d(1).set({ hour: 13 }), end: d(1).set({ hour: 14, minute: 30 }), status: 'doing', style: { backgroundColor: '#4caf50', color: '#fff', fontStyle: 'italic', borderRadius: '8px' } }),
+  createCalendarItem({ type: 'appointment', id: 'c3', title: 'カスタム: 青+影', start: d(1).set({ hour: 15, minute: 30 }), end: d(1).set({ hour: 17 }), style: { backgroundColor: 'rgb(33,150,243)', color: '#fff', border: '2px solid #1976d2' } }),
+  createCalendarItem({ type: 'task', id: 'c4', title: 'カスタム: グラデーション', start: d(2).set({ hour: 9 }), end: d(2).set({ hour: 10, minute: 30 }), status: 'done', style: { background: 'linear-gradient(135deg,#667eea,#764ba2)', color: '#fff', fontWeight: '600', borderRadius: '12px' } }),
+  createCalendarItem({ type: 'appointment', id: 'c5', title: 'カスタム: オレンジ点線', start: d(3).set({ hour: 14 }), end: d(3).set({ hour: 15, minute: 30 }), style: { backgroundColor: '#ff9800', color: '#333', border: '3px dotted #f57c00' } }),
+  createCalendarItem({ type: 'task', id: 'c6', title: 'カスタム: 透明度指定済み', start: d(2).set({ hour: 11 }), end: d(2).set({ hour: 12 }), status: 'todo', style: { backgroundColor: 'rgba(156,39,176,0.9)', color: '#fff', textDecoration: 'underline' } }),
 
   // ===== 終日アイテム (単日・複数日) =====
-  { id: 'a1', type: 'task', title: '終日: プロジェクト計画', dateRange: createCalendarDateRange(toCalendarDate(d(0)), toCalendarDate(d(1))), status: 'doing', parents: ['新規事業プロジェクト'] } as Task,
-  { id: 'a2', type: 'appointment', title: '終日: 全社会議', dateRange: createCalendarDateRange(toCalendarDate(d(1)), toCalendarDate(d(2))) } as Appointment,
-  { id: 'a3', type: 'task', title: '終日: 3日間研修', dateRange: createCalendarDateRange(toCalendarDate(d(2)), toCalendarDate(d(5))), status: 'todo', style: { backgroundColor: '#4caf50', color: '#fff' } } as Task,
-  { id: 'a4', type: 'appointment', title: '終日: 出張（大阪）', dateRange: createCalendarDateRange(toCalendarDate(d(5)), toCalendarDate(d(8))), parents: ['営業活動'] } as Appointment,
-  { id: 'a5', type: 'task', title: '終日: スプリント計画', dateRange: createCalendarDateRange(toCalendarDate(d(-7)), toCalendarDate(d(-5))), status: 'done', parents: ['開発チーム', 'Sprint#5'] } as Task,
-  { id: 'a6', type: 'appointment', title: '終日: 年次総会', dateRange: createCalendarDateRange(toCalendarDate(d(14)), toCalendarDate(d(15))) } as Appointment,
-  { id: 'a7', type: 'task', title: '終日: 月次レビュー', dateRange: createCalendarDateRange(toCalendarDate(d(-3)), toCalendarDate(d(-2))), status: 'done' } as Task,
-  { id: 'a8', type: 'appointment', title: '終日: 週またぎイベント', dateRange: createCalendarDateRange(toCalendarDate(d(10)), toCalendarDate(d(17))), style: { backgroundColor: '#9c27b0', color: '#fff' } } as Appointment,
-  { id: 'a9', type: 'task', title: '終日: 月またぎタスク', dateRange: createCalendarDateRange(toCalendarDate(d(25)), toCalendarDate(d(35))), status: 'todo', parents: ['Q2計画'] } as Task,
-  { id: 'a10', type: 'appointment', title: '終日: 過去の終日', dateRange: createCalendarDateRange(toCalendarDate(d(-20)), toCalendarDate(d(-18))) } as Appointment,
+  createCalendarItem({ type: 'task', id: 'a1', title: '終日: プロジェクト計画', dateRange: createCalendarDateRange(toCalendarDate(d(0)), toCalendarDate(d(1))), status: 'doing', parents: ['新規事業プロジェクト'] }),
+  createCalendarItem({ type: 'appointment', id: 'a2', title: '終日: 全社会議', dateRange: createCalendarDateRange(toCalendarDate(d(1)), toCalendarDate(d(2))) }),
+  createCalendarItem({ type: 'task', id: 'a3', title: '終日: 3日間研修', dateRange: createCalendarDateRange(toCalendarDate(d(2)), toCalendarDate(d(5))), status: 'todo', style: { backgroundColor: '#4caf50', color: '#fff' } }),
+  createCalendarItem({ type: 'appointment', id: 'a4', title: '終日: 出張（大阪）', dateRange: createCalendarDateRange(toCalendarDate(d(5)), toCalendarDate(d(8))), parents: ['営業活動'] }),
+  createCalendarItem({ type: 'task', id: 'a5', title: '終日: スプリント計画', dateRange: createCalendarDateRange(toCalendarDate(d(-7)), toCalendarDate(d(-5))), status: 'done', parents: ['開発チーム', 'Sprint#5'] }),
+  createCalendarItem({ type: 'appointment', id: 'a6', title: '終日: 年次総会', dateRange: createCalendarDateRange(toCalendarDate(d(14)), toCalendarDate(d(15))) }),
+  createCalendarItem({ type: 'task', id: 'a7', title: '終日: 月次レビュー', dateRange: createCalendarDateRange(toCalendarDate(d(-3)), toCalendarDate(d(-2))), status: 'done' }),
+  createCalendarItem({ type: 'appointment', id: 'a8', title: '終日: 週またぎイベント', dateRange: createCalendarDateRange(toCalendarDate(d(10)), toCalendarDate(d(17))), style: { backgroundColor: '#9c27b0', color: '#fff' } }),
+  createCalendarItem({ type: 'task', id: 'a9', title: '終日: 月またぎタスク', dateRange: createCalendarDateRange(toCalendarDate(d(25)), toCalendarDate(d(35))), status: 'todo', parents: ['Q2計画'] }),
+  createCalendarItem({ type: 'appointment', id: 'a10', title: '終日: 過去の終日', dateRange: createCalendarDateRange(toCalendarDate(d(-20)), toCalendarDate(d(-18))) }),
 
   // ===== 時刻付きアイテム（前後1ヶ月を幅広くカバー） =====
   // 過去: -1〜-30日
-  { id: 'p1', type: 'task', title: '先週の振り返り', start: d(-1).set({ hour: 10, minute: 0 }), end: d(-1).set({ hour: 11, minute: 0 }), status: 'done', parents: ['チーム', '週次'] } as Task,
-  { id: 'p2', type: 'appointment', title: '先週のクライアント面談', start: d(-1).set({ hour: 14, minute: 0 }), end: d(-1).set({ hour: 15, minute: 30 }) } as Appointment,
-  { id: 'p3', type: 'task', title: 'バグ修正#1000', start: d(-2).set({ hour: 9, minute: 0 }), end: d(-2).set({ hour: 12, minute: 0 }), status: 'done' } as Task,
-  { id: 'p4', type: 'appointment', title: '先々週の全体会議', start: d(-7).set({ hour: 10, minute: 0 }), end: d(-7).set({ hour: 12, minute: 0 }) } as Appointment,
-  { id: 'p5', type: 'task', title: 'スプリントレビュー', start: d(-7).set({ hour: 15, minute: 0 }), end: d(-7).set({ hour: 17, minute: 0 }), status: 'done', parents: ['開発チーム', 'Sprint#4'] } as Task,
-  { id: 'p6', type: 'task', title: '仕様書作成', start: d(-10).set({ hour: 9, minute: 0 }), end: d(-10).set({ hour: 18, minute: 0 }), status: 'done', parents: ['B社案件'] } as Task,
-  { id: 'p7', type: 'appointment', title: 'キックオフMTG', start: d(-14).set({ hour: 10, minute: 0 }), end: d(-14).set({ hour: 12, minute: 0 }), parents: ['新規事業プロジェクト'] } as Appointment,
-  { id: 'p8', type: 'task', title: 'UI設計レビュー', start: d(-14).set({ hour: 14, minute: 0 }), end: d(-14).set({ hour: 16, minute: 0 }), status: 'done', parents: ['UIリニューアル'] } as Task,
-  { id: 'p9', type: 'appointment', title: '月初計画MTG', start: d(-20).set({ hour: 9, minute: 0 }), end: d(-20).set({ hour: 11, minute: 0 }) } as Appointment,
-  { id: 'p10', type: 'task', title: '先月の総括タスク', start: d(-25).set({ hour: 10, minute: 0 }), end: d(-25).set({ hour: 12, minute: 0 }), status: 'done' } as Task,
-  { id: 'p11', type: 'task', title: '先月の設計レビュー', start: d(-28).set({ hour: 14, minute: 0 }), end: d(-28).set({ hour: 16, minute: 0 }), status: 'done', parents: ['A社案件', '設計フェーズ'] } as Task,
-  { id: 'p12', type: 'appointment', title: '先月末の全社総会', start: d(-30).set({ hour: 10, minute: 0 }), end: d(-30).set({ hour: 17, minute: 0 }) } as Appointment,
+  createCalendarItem({ type: 'task', id: 'p1', title: '先週の振り返り', start: d(-1).set({ hour: 10 }), end: d(-1).set({ hour: 11 }), status: 'done', parents: ['チーム', '週次'] }),
+  createCalendarItem({ type: 'appointment', id: 'p2', title: '先週のクライアント面談', start: d(-1).set({ hour: 14 }), end: d(-1).set({ hour: 15, minute: 30 }) }),
+  createCalendarItem({ type: 'task', id: 'p3', title: 'バグ修正#1000', start: d(-2).set({ hour: 9 }), end: d(-2).set({ hour: 12 }), status: 'done' }),
+  createCalendarItem({ type: 'appointment', id: 'p4', title: '先々週の全体会議', start: d(-7).set({ hour: 10 }), end: d(-7).set({ hour: 12 }) }),
+  createCalendarItem({ type: 'task', id: 'p5', title: 'スプリントレビュー', start: d(-7).set({ hour: 15 }), end: d(-7).set({ hour: 17 }), status: 'done', parents: ['開発チーム', 'Sprint#4'] }),
+  createCalendarItem({ type: 'task', id: 'p6', title: '仕様書作成', start: d(-10).set({ hour: 9 }), end: d(-10).set({ hour: 18 }), status: 'done', parents: ['B社案件'] }),
+  createCalendarItem({ type: 'appointment', id: 'p7', title: 'キックオフMTG', start: d(-14).set({ hour: 10 }), end: d(-14).set({ hour: 12 }), parents: ['新規事業プロジェクト'] }),
+  createCalendarItem({ type: 'task', id: 'p8', title: 'UI設計レビュー', start: d(-14).set({ hour: 14 }), end: d(-14).set({ hour: 16 }), status: 'done', parents: ['UIリニューアル'] }),
+  createCalendarItem({ type: 'appointment', id: 'p9', title: '月初計画MTG', start: d(-20).set({ hour: 9 }), end: d(-20).set({ hour: 11 }) }),
+  createCalendarItem({ type: 'task', id: 'p10', title: '先月の総括タスク', start: d(-25).set({ hour: 10 }), end: d(-25).set({ hour: 12 }), status: 'done' }),
+  createCalendarItem({ type: 'task', id: 'p11', title: '先月の設計レビュー', start: d(-28).set({ hour: 14 }), end: d(-28).set({ hour: 16 }), status: 'done', parents: ['A社案件', '設計フェーズ'] }),
+  createCalendarItem({ type: 'appointment', id: 'p12', title: '先月末の全社総会', start: d(-30).set({ hour: 10 }), end: d(-30).set({ hour: 17 }) }),
 
   // 近未来: +1〜+14日
-  { id: 'f1', type: 'task', title: 'ドキュメント更新', start: d(1).set({ hour: 10, minute: 0 }), end: d(1).set({ hour: 11, minute: 30 }), status: 'todo', parents: ['UIリニューアル', 'ドキュメント整備'] } as Task,
-  { id: 'f2', type: 'appointment', title: 'クライアントA打ち合わせ', start: d(2).set({ hour: 14, minute: 0 }), end: d(2).set({ hour: 16, minute: 0 }), parents: ['A社案件', '要件定義フェーズ'] } as Appointment,
-  { id: 'f3', type: 'appointment', title: 'ランチミーティング', start: d(3).set({ hour: 12, minute: 0 }), end: d(3).set({ hour: 13, minute: 0 }) } as Appointment,
-  { id: 'f4', type: 'task', title: 'テスト実装', start: d(3).set({ hour: 14, minute: 0 }), end: d(3).set({ hour: 17, minute: 0 }), status: 'todo', parents: ['機能開発Sprint#5'] } as Task,
-  { id: 'f5', type: 'task', title: 'パフォーマンス改善', start: d(4).set({ hour: 9, minute: 0 }), end: d(4).set({ hour: 12, minute: 0 }), status: 'todo' } as Task,
-  { id: 'f6', type: 'appointment', title: '週次定例会', start: d(4).set({ hour: 14, minute: 0 }), end: d(4).set({ hour: 15, minute: 0 }), parents: ['週次定例会'] } as Appointment,
-  { id: 'f7', type: 'task', title: 'セキュリティ監査対応', start: d(6).set({ hour: 10, minute: 0 }), end: d(6).set({ hour: 12, minute: 0 }), status: 'todo', parents: ['インフラチーム'] } as Task,
-  { id: 'f8', type: 'appointment', title: '取締役会プレゼン', start: d(7).set({ hour: 10, minute: 0 }), end: d(7).set({ hour: 12, minute: 0 }), parents: ['新規事業プロジェクト'] } as Appointment,
-  { id: 'f9', type: 'task', title: 'API設計書作成', start: d(8).set({ hour: 9, minute: 0 }), end: d(8).set({ hour: 12, minute: 0 }), status: 'todo', parents: ['B社案件', '設計フェーズ'] } as Task,
-  { id: 'f10', type: 'appointment', title: 'B社ステークホルダーMTG', start: d(9).set({ hour: 14, minute: 0 }), end: d(9).set({ hour: 16, minute: 0 }), parents: ['B社案件'] } as Appointment,
-  { id: 'f11', type: 'task', title: 'コードフリーズ対応', start: d(11).set({ hour: 9, minute: 0 }), end: d(11).set({ hour: 18, minute: 0 }), status: 'todo', parents: ['機能開発Sprint#5'] } as Task,
-  { id: 'f12', type: 'appointment', title: 'スプリントレビュー#5', start: d(12).set({ hour: 15, minute: 0 }), end: d(12).set({ hour: 17, minute: 0 }), parents: ['開発チーム', 'Sprint#5'] } as Appointment,
-  { id: 'f13', type: 'task', title: 'リリースノート作成', start: d(13).set({ hour: 10, minute: 0 }), end: d(13).set({ hour: 12, minute: 0 }), status: 'todo' } as Task,
-  { id: 'f14', type: 'appointment', title: '外部研修', start: d(14).set({ hour: 9, minute: 0 }), end: d(14).set({ hour: 17, minute: 0 }) } as Appointment,
+  createCalendarItem({ type: 'task', id: 'f1', title: 'ドキュメント更新', start: d(1).set({ hour: 10 }), end: d(1).set({ hour: 11, minute: 30 }), status: 'todo', parents: ['UIリニューアル', 'ドキュメント整備'] }),
+  createCalendarItem({ type: 'appointment', id: 'f2', title: 'クライアントA打ち合わせ', start: d(2).set({ hour: 14 }), end: d(2).set({ hour: 16 }), parents: ['A社案件', '要件定義フェーズ'] }),
+  createCalendarItem({ type: 'appointment', id: 'f3', title: 'ランチミーティング', start: d(3).set({ hour: 12 }), end: d(3).set({ hour: 13 }) }),
+  createCalendarItem({ type: 'task', id: 'f4', title: 'テスト実装', start: d(3).set({ hour: 14 }), end: d(3).set({ hour: 17 }), status: 'todo', parents: ['機能開発Sprint#5'] }),
+  createCalendarItem({ type: 'task', id: 'f5', title: 'パフォーマンス改善', start: d(4).set({ hour: 9 }), end: d(4).set({ hour: 12 }), status: 'todo' }),
+  createCalendarItem({ type: 'appointment', id: 'f6', title: '週次定例会', start: d(4).set({ hour: 14 }), end: d(4).set({ hour: 15 }), parents: ['週次定例会'] }),
+  createCalendarItem({ type: 'task', id: 'f7', title: 'セキュリティ監査対応', start: d(6).set({ hour: 10 }), end: d(6).set({ hour: 12 }), status: 'todo', parents: ['インフラチーム'] }),
+  createCalendarItem({ type: 'appointment', id: 'f8', title: '取締役会プレゼン', start: d(7).set({ hour: 10 }), end: d(7).set({ hour: 12 }), parents: ['新規事業プロジェクト'] }),
+  createCalendarItem({ type: 'task', id: 'f9', title: 'API設計書作成', start: d(8).set({ hour: 9 }), end: d(8).set({ hour: 12 }), status: 'todo', parents: ['B社案件', '設計フェーズ'] }),
+  createCalendarItem({ type: 'appointment', id: 'f10', title: 'B社ステークホルダーMTG', start: d(9).set({ hour: 14 }), end: d(9).set({ hour: 16 }), parents: ['B社案件'] }),
+  createCalendarItem({ type: 'task', id: 'f11', title: 'コードフリーズ対応', start: d(11).set({ hour: 9 }), end: d(11).set({ hour: 18 }), status: 'todo', parents: ['機能開発Sprint#5'] }),
+  createCalendarItem({ type: 'appointment', id: 'f12', title: 'スプリントレビュー#5', start: d(12).set({ hour: 15 }), end: d(12).set({ hour: 17 }), parents: ['開発チーム', 'Sprint#5'] }),
+  createCalendarItem({ type: 'task', id: 'f13', title: 'リリースノート作成', start: d(13).set({ hour: 10 }), end: d(13).set({ hour: 12 }), status: 'todo' }),
+  createCalendarItem({ type: 'appointment', id: 'f14', title: '外部研修', start: d(14).set({ hour: 9 }), end: d(14).set({ hour: 17 }) }),
 
   // 遠未来: +15〜+30日
-  { id: 'ff1', type: 'task', title: '次スプリント計画', start: d(15).set({ hour: 10, minute: 0 }), end: d(15).set({ hour: 12, minute: 0 }), status: 'todo', parents: ['開発チーム', 'Sprint#6'] } as Task,
-  { id: 'ff2', type: 'appointment', title: '月次レポート提出', start: d(17).set({ hour: 15, minute: 0 }), end: d(17).set({ hour: 16, minute: 0 }) } as Appointment,
-  { id: 'ff3', type: 'task', title: 'インフラ移行作業', start: d(18).set({ hour: 9, minute: 0 }), end: d(18).set({ hour: 18, minute: 0 }), status: 'todo', parents: ['インフラチーム'] } as Task,
-  { id: 'ff4', type: 'appointment', title: 'A社最終提案', start: d(20).set({ hour: 14, minute: 0 }), end: d(20).set({ hour: 16, minute: 0 }), parents: ['A社案件'] } as Appointment,
-  { id: 'ff5', type: 'task', title: 'Q2計画策定', start: d(22).set({ hour: 10, minute: 0 }), end: d(22).set({ hour: 12, minute: 0 }), status: 'todo', parents: ['Q2計画'] } as Task,
-  { id: 'ff6', type: 'appointment', title: '年度末全体会議', start: d(25).set({ hour: 10, minute: 0 }), end: d(25).set({ hour: 17, minute: 0 }) } as Appointment,
-  { id: 'ff7', type: 'task', title: '次期プロジェクト企画', start: d(28).set({ hour: 9, minute: 0 }), end: d(28).set({ hour: 12, minute: 0 }), status: 'todo', parents: ['新規事業プロジェクト', '次期フェーズ'] } as Task,
-  { id: 'ff8', type: 'appointment', title: '来月の外部監査', start: d(30).set({ hour: 10, minute: 0 }), end: d(30).set({ hour: 17, minute: 0 }) } as Appointment,
+  createCalendarItem({ type: 'task', id: 'ff1', title: '次スプリント計画', start: d(15).set({ hour: 10 }), end: d(15).set({ hour: 12 }), status: 'todo', parents: ['開発チーム', 'Sprint#6'] }),
+  createCalendarItem({ type: 'appointment', id: 'ff2', title: '月次レポート提出', start: d(17).set({ hour: 15 }), end: d(17).set({ hour: 16 }) }),
+  createCalendarItem({ type: 'task', id: 'ff3', title: 'インフラ移行作業', start: d(18).set({ hour: 9 }), end: d(18).set({ hour: 18 }), status: 'todo', parents: ['インフラチーム'] }),
+  createCalendarItem({ type: 'appointment', id: 'ff4', title: 'A社最終提案', start: d(20).set({ hour: 14 }), end: d(20).set({ hour: 16 }), parents: ['A社案件'] }),
+  createCalendarItem({ type: 'task', id: 'ff5', title: 'Q2計画策定', start: d(22).set({ hour: 10 }), end: d(22).set({ hour: 12 }), status: 'todo', parents: ['Q2計画'] }),
+  createCalendarItem({ type: 'appointment', id: 'ff6', title: '年度末全体会議', start: d(25).set({ hour: 10 }), end: d(25).set({ hour: 17 }) }),
+  createCalendarItem({ type: 'task', id: 'ff7', title: '次期プロジェクト企画', start: d(28).set({ hour: 9 }), end: d(28).set({ hour: 12 }), status: 'todo', parents: ['新規事業プロジェクト', '次期フェーズ'] }),
+  createCalendarItem({ type: 'appointment', id: 'ff8', title: '来月の外部監査', start: d(30).set({ hour: 10 }), end: d(30).set({ hour: 17 }) }),
 
-  // 複数日またがり (timed)
-  { id: 'm1', type: 'task', title: '3日間ワークショップ', dateRange: createCalendarDateRange(toCalendarDate(d(1)), toCalendarDate(d(3))), status: 'doing', parents: ['研修プログラム'] } as Task,
-  { id: 'm2', type: 'appointment', title: '出張（大阪）', dateRange: createCalendarDateRange(toCalendarDate(d(5)), toCalendarDate(d(7))), parents: ['営業活動'] } as Appointment,
-  { id: 'm3', type: 'task', title: '週またぎ開発タスク', dateRange: createCalendarDateRange(toCalendarDate(d(-2)), toCalendarDate(d(2))), status: 'doing', parents: ['機能開発Sprint#5'] } as Task,
-  { id: 'm4', type: 'appointment', title: '展示会参加', dateRange: createCalendarDateRange(toCalendarDate(d(19)), toCalendarDate(d(21))) } as Appointment,
-  { id: 'm5', type: 'task', title: '月またぎプロジェクト', dateRange: createCalendarDateRange(toCalendarDate(d(28)), toCalendarDate(d(33))), status: 'todo', parents: ['Q2計画', '大型案件'] } as Task,
+  // 複数日またがり (allday)
+  createCalendarItem({ type: 'task', id: 'm1', title: '3日間ワークショップ', dateRange: createCalendarDateRange(toCalendarDate(d(1)), toCalendarDate(d(3))), status: 'doing', parents: ['研修プログラム'] }),
+  createCalendarItem({ type: 'appointment', id: 'm2', title: '出張（大阪）', dateRange: createCalendarDateRange(toCalendarDate(d(5)), toCalendarDate(d(7))), parents: ['営業活動'] }),
+  createCalendarItem({ type: 'task', id: 'm3', title: '週またぎ開発タスク', dateRange: createCalendarDateRange(toCalendarDate(d(-2)), toCalendarDate(d(2))), status: 'doing', parents: ['機能開発Sprint#5'] }),
+  createCalendarItem({ type: 'appointment', id: 'm4', title: '展示会参加', dateRange: createCalendarDateRange(toCalendarDate(d(19)), toCalendarDate(d(21))) }),
+  createCalendarItem({ type: 'task', id: 'm5', title: '月またぎプロジェクト', dateRange: createCalendarDateRange(toCalendarDate(d(28)), toCalendarDate(d(33))), status: 'todo', parents: ['Q2計画', '大型案件'] }),
 
   // 同一日に多数（+1日: expanded-panel確認用）
-  { id: 'e1', type: 'task', title: '朝のスタンドアップ', start: d(1).set({ hour: 9, minute: 0 }), end: d(1).set({ hour: 9, minute: 15 }), status: 'done' } as Task,
-  { id: 'e2', type: 'appointment', title: '採用面接', start: d(1).set({ hour: 10, minute: 0 }), end: d(1).set({ hour: 11, minute: 0 }) } as Appointment,
-  { id: 'e3', type: 'task', title: 'PRレビュー#234', start: d(1).set({ hour: 11, minute: 30 }), end: d(1).set({ hour: 12, minute: 30 }), status: 'todo', parents: ['機能開発Sprint#5'] } as Task,
-  { id: 'e4', type: 'appointment', title: 'ランチMTG', start: d(1).set({ hour: 12, minute: 0 }), end: d(1).set({ hour: 13, minute: 0 }) } as Appointment,
-  { id: 'e5', type: 'task', title: 'DB移行スクリプト作成', start: d(1).set({ hour: 14, minute: 0 }), end: d(1).set({ hour: 16, minute: 0 }), status: 'todo', parents: ['インフラチーム'] } as Task,
-  { id: 'e6', type: 'appointment', title: '社外セミナー', start: d(1).set({ hour: 18, minute: 0 }), end: d(1).set({ hour: 20, minute: 0 }) } as Appointment,
+  createCalendarItem({ type: 'task', id: 'e1', title: '朝のスタンドアップ', start: d(1).set({ hour: 9 }), end: d(1).set({ hour: 9, minute: 15 }), status: 'done' }),
+  createCalendarItem({ type: 'appointment', id: 'e2', title: '採用面接', start: d(1).set({ hour: 10 }), end: d(1).set({ hour: 11 }) }),
+  createCalendarItem({ type: 'task', id: 'e3', title: 'PRレビュー#234', start: d(1).set({ hour: 11, minute: 30 }), end: d(1).set({ hour: 12, minute: 30 }), status: 'todo', parents: ['機能開発Sprint#5'] }),
+  createCalendarItem({ type: 'appointment', id: 'e4', title: 'ランチMTG', start: d(1).set({ hour: 12 }), end: d(1).set({ hour: 13 }) }),
+  createCalendarItem({ type: 'task', id: 'e5', title: 'DB移行スクリプト作成', start: d(1).set({ hour: 14 }), end: d(1).set({ hour: 16 }), status: 'todo', parents: ['インフラチーム'] }),
+  createCalendarItem({ type: 'appointment', id: 'e6', title: '社外セミナー', start: d(1).set({ hour: 18 }), end: d(1).set({ hour: 20 }) }),
 ]);
 
 let currentDate = $state(DateTime.now());
