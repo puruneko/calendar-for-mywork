@@ -827,8 +827,11 @@ function handleDrop(event: DragEvent, day: DateTime) {
   
   if (!draggedItem || !dragPreviewStyle) return;
   
-  // dragPreviewStyleで計算済みの新しい開始・終了日時を使用
-  onItemMove?.(draggedItem, dragPreviewStyle.newStart, dragPreviewStyle.newEnd);
+  // Deadline（CalendarDateTimePoint）はマウス位置 = アイテム下辺 = 期限時刻
+  // newEnd（= newStart + minorTick）が実際の期限時刻になる
+  const moveStart = isDeadlineTimed(draggedItem) ? dragPreviewStyle.newEnd : dragPreviewStyle.newStart;
+  const moveEnd = isDeadlineTimed(draggedItem) ? dragPreviewStyle.newEnd : dragPreviewStyle.newEnd;
+  onItemMove?.(draggedItem, moveStart, moveEnd);
   
   // 状態をリセット
   draggedItem = null;

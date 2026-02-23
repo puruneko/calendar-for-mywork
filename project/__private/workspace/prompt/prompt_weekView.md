@@ -20,6 +20,7 @@ Report READY when governance is loaded.
 # 残
 
 - [ ] ストレージ（設定値など）をシングルトンにしてカレンダー側に渡す方式にする。今はでdemoのローカルで管理され、handleSettingsChangeで変更されている。これは将来的にカスタム値が散らばる可能性があり危険。
+- [ ] リファクタリング。weekView,monthView.svelteのコードが長すぎる
 
 
 # weekView
@@ -35,7 +36,7 @@ Report READY when governance is loaded.
 ─── request ──────────────────────
 
 - 0006
-	- deadlineのDnDが1minorTick分下にドロップされたことになります。修正して
+	- deadlineのDnDが1minorTick分下にドロップされたことになっています。修正して。例えば、1230～12:45のminorTickにドロップしたら、deadlineは12:45にならなければいけないところ、今の実装は12:30になってしまっています
 
 ─── request ──────────────────────
 
