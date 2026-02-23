@@ -2,7 +2,7 @@
 import { DateTime } from 'luxon';
 import { tick } from 'svelte';
 import type { CalendarItem } from '../models';
-import { formatTime, getItemStart, getItemEnd, itemContainsDay, isTimed, layoutWeekAllDay, type AllDayItem, formatDate } from '../utils';
+import { formatTime, getItemStart, getItemEnd, itemContainsDay, isTimed, isDeadlineDay, layoutWeekAllDay, type AllDayItem, formatDate } from '../utils';
 
 type Props = {
   items?: CalendarItem[];
@@ -176,8 +176,13 @@ let weekdayHeaders = $derived.by(() => {
   });
 });
 
-// 日をまたがるアイテムかどうかを判定
+// 日をまたがるアイテムか、または allday/deadline-day アイテムかを判定
+// （MonthView の複数日レーンに表示するアイテムの条件）
 function isMultiDayItem(item: CalendarItem): boolean {
+  // 日単位 Deadline は単日でも allday レーンに表示
+  if (isDeadlineDay(item)) return true;
+  // CalendarDateRange（allday）は単日でも allday レーンに表示
+  if (item.temporal.kind === 'CalendarDateRange') return true;
   const itemStart = getItemStart(item);
   const itemEnd = getItemEnd(item);
   if (!itemStart || !itemEnd) return false;
@@ -724,19 +729,23 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
   // allday itemのendはdateRangeのexclusive endをそのまま使用する
   const allDayItems: AllDayItem[] = items
     .filter(item => isMultiDayItem(item))
+    // 日単位 Deadline を先頭に優先ソート（レーン0に配置されやすくなる）
+    .sort((a, b) => {
+      const aDeadline = isDeadlineDay(a) ? 0 : 1;
+      const bDeadline = isDeadlineDay(b) ? 0 : 1;
+      return aDeadline - bDeadline;
+    })
     .map(item => {
       const start = getItemStart(item);
       const end = getItemEnd(item);
       if (!start || !end) return null;
 
       let endDateStr: string;
-      if (item.temporal.kind === 'CalendarDateRange') {
-        // AllDay item: endExclusive は既にexclusive
+      if (item.temporal.kind === 'CalendarDateRange' || isDeadlineDay(item)) {
+        // AllDay / Deadline: endExclusive は既にexclusive（翌日）
         endDateStr = formatDate(end);
       } else {
         // Timed item: end は "2/23 17:00" のような時刻付き → 翌日のstartOfDayをexclusiveとする
-        // "2/21 09:00" 〜 "2/23 17:00" のアイテムは 2/21, 2/22, 2/23 の3日間を占める
-        // exclusive endは 2/24
         endDateStr = formatDate(end.plus({ days: 1 }).startOf('day'));
       }
 
@@ -958,6 +967,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
               <div
                 class="allday-item"
                 class:dragging={draggedItem === item}
+                class:deadline-day={isDeadlineDay(item)}
                 draggable="true"
                 ondragstart={(e) => handleDragStart(e, item, startIndex, week)}
                 ondragend={handleDragEnd}
@@ -966,20 +976,32 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
                   --lane: {lane};
                   --start-index: {startIndex};
                   --span: {span};
-                  background-color: {getItemBgColor(item)};
+                  background-color: {isDeadlineDay(item) ? `color-mix(in srgb, #ef4444 ${50}%, transparent)` : getItemBgColor(item)};
+                  {isDeadlineDay(item) ? 'color: #7f1d1d; font-weight: 600;' : ''}
                 "
               >
-                <!-- 左端リサイズハンドル -->
-                <div
-                  class="resize-handle resize-handle-left"
-                  onmousedown={(e) => handleResizeStart(e, item, 'left')}
-                ></div>
-                <div class="bar-content">{item.title}</div>
-                <!-- 右端リサイズハンドル -->
-                <div
-                  class="resize-handle resize-handle-right"
-                  onmousedown={(e) => handleResizeStart(e, item, 'right')}
-                ></div>
+                {#if isDeadlineDay(item)}
+                  <!-- 日単位 Deadline: ↓アイコン + タイトル（赤背景、リサイズなし） -->
+                  <span class="deadline-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M12 5v13M5 12l7 7 7-7"/>
+                    </svg>
+                  </span>
+                  <div class="bar-content">{item.title}</div>
+                {:else}
+                  <!-- 通常 allday アイテム -->
+                  <!-- 左端リサイズハンドル -->
+                  <div
+                    class="resize-handle resize-handle-left"
+                    onmousedown={(e) => handleResizeStart(e, item, 'left')}
+                  ></div>
+                  <div class="bar-content">{item.title}</div>
+                  <!-- 右端リサイズハンドル -->
+                  <div
+                    class="resize-handle resize-handle-right"
+                    onmousedown={(e) => handleResizeStart(e, item, 'right')}
+                  ></div>
+                {/if}
               </div>
             {/each}
             {/if}
@@ -1416,6 +1438,19 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
 
   .allday-item.dragging {
     opacity: 0.5;
+  }
+
+  /* 日単位 Deadline */
+  .allday-item.deadline-day {
+    font-weight: 600;
+  }
+
+  .allday-item.deadline-day .deadline-icon {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    color: #7f1d1d;
+    padding: 0 2px 0 4px;
   }
 
   /* リサイズハンドル */

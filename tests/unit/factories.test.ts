@@ -112,7 +112,7 @@ describe('createCalendarItem', () => {
   });
 
   describe('Deadline', () => {
-    it('CalendarDateTimePoint Deadlineを生成できること', () => {
+    it('CalendarDateTimePoint Deadlineを生成できること（temporal 直接指定）', () => {
       const at = now.set({ hour: 15, minute: 0, second: 0, millisecond: 0 });
       const item = createCalendarItem({
         type: 'deadline',
@@ -124,7 +124,7 @@ describe('createCalendarItem', () => {
       expect(item.temporal.kind).toBe('CalendarDateTimePoint');
     });
 
-    it('CalendarDatePoint Deadlineを生成できること', () => {
+    it('CalendarDatePoint Deadlineを生成できること（temporal 直接指定）', () => {
       const item = createCalendarItem({
         type: 'deadline',
         id: 'd2',
@@ -133,6 +133,34 @@ describe('createCalendarItem', () => {
       });
       expect(item.type).toBe('deadline');
       expect(item.temporal.kind).toBe('CalendarDatePoint');
+    });
+
+    it('at: DateTime shorthand で分単位 Deadline を生成できること', () => {
+      const at = now.set({ hour: 17, minute: 0, second: 0, millisecond: 0 });
+      const item = createCalendarItem({ type: 'deadline', id: 'd3', title: '提案書締切', at });
+      expect(item.type).toBe('deadline');
+      expect(item.temporal.kind).toBe('CalendarDateTimePoint');
+      if (item.temporal.kind === 'CalendarDateTimePoint') {
+        expect(item.temporal.at.equals(at)).toBe(true);
+      }
+    });
+
+    it('datePoint: ISODate shorthand で日単位 Deadline を生成できること', () => {
+      const item = createCalendarItem({ type: 'deadline', id: 'd4', title: 'スプリント締切', datePoint: today });
+      expect(item.type).toBe('deadline');
+      expect(item.temporal.kind).toBe('CalendarDatePoint');
+      if (item.temporal.kind === 'CalendarDatePoint') {
+        expect(item.temporal.at).toBe(today);
+      }
+    });
+
+    it('idが空の場合Errorをスローすること', () => {
+      const at = now.set({ hour: 17, minute: 0 });
+      expect(() => createCalendarItem({ type: 'deadline', id: '', title: '期限', at })).toThrow();
+    });
+
+    it('titleが空の場合Errorをスローすること', () => {
+      expect(() => createCalendarItem({ type: 'deadline', id: 'd5', title: '', datePoint: today })).toThrow();
     });
   });
 

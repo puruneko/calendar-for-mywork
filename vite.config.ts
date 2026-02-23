@@ -10,6 +10,7 @@ export default defineConfig(({ command }) => ({
     server: {
         port: devPort,
         strictPort: true,
+        host: 'localhost',
     },
     resolve: {
         alias: {

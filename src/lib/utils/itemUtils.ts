@@ -29,6 +29,20 @@ export function isDeadlinePoint(item: CalendarItem): boolean {
 }
 
 /**
+ * アイテムが分単位 Deadline（CalendarDateTimePoint）かどうかを判定
+ */
+export function isDeadlineTimed(item: CalendarItem): boolean {
+  return item.temporal.kind === 'CalendarDateTimePoint';
+}
+
+/**
+ * アイテムが日単位 Deadline（CalendarDatePoint）かどうかを判定
+ */
+export function isDeadlineDay(item: CalendarItem): boolean {
+  return item.temporal.kind === 'CalendarDatePoint';
+}
+
+/**
  * アイテムの開始日時を取得（レイアウト用）
  * - CalendarDateTimeRange: start をそのまま返す
  * - CalendarDateRange: start の 00:00 を返す

@@ -19,7 +19,7 @@ Report READY when governance is loaded.
 
 # 残
 
-- [ ] -
+- [ ] ストレージ（設定値など）をシングルトンにしてカレンダー側に渡す方式にする。今はでdemoのローカルで管理され、handleSettingsChangeで変更されている。これは将来的にカスタム値が散らばる可能性があり危険。
 
 
 # weekView
@@ -34,6 +34,8 @@ Report READY when governance is loaded.
 ─── request ──────────────────────
 ─── request ──────────────────────
 ─── request ──────────────────────
+
+
 ─── request ──────────────────────
 
 - 006

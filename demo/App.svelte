@@ -92,6 +92,12 @@ let items = $state<CalendarItem[]>([
   createCalendarItem({ type: 'task', id: 'ff7', title: '次期プロジェクト企画', start: d(28).set({ hour: 9 }), end: d(28).set({ hour: 12 }), status: 'todo', parents: ['新規事業プロジェクト', '次期フェーズ'] }),
   createCalendarItem({ type: 'appointment', id: 'ff8', title: '来月の外部監査', start: d(30).set({ hour: 10 }), end: d(30).set({ hour: 17 }) }),
 
+  // ===== Deadline アイテム =====
+  createCalendarItem({ type: 'deadline', id: 'dl1', title: '提案書締切（分単位）', at: d(0).set({ hour: 17 }) }),
+  createCalendarItem({ type: 'deadline', id: 'dl2', title: 'レポート提出締切（分単位）', at: d(1).set({ hour: 12 }) }),
+  createCalendarItem({ type: 'deadline', id: 'dl3', title: 'スプリント締切（日単位）', datePoint: toISODate(d(3)) }),
+  createCalendarItem({ type: 'deadline', id: 'dl4', title: 'リリース期限（日単位）', datePoint: toISODate(d(14)) }),
+
   // 複数日またがり (allday)
   createCalendarItem({ type: 'task', id: 'm1', title: '3日間ワークショップ', dateRange: { start: toISODate(d(1)), endExclusive: toISODate(d(3)) }, status: 'doing', parents: ['研修プログラム'] }),
   createCalendarItem({ type: 'appointment', id: 'm2', title: '出張（大阪）', dateRange: { start: toISODate(d(5)), endExclusive: toISODate(d(7)) }, parents: ['営業活動'] }),

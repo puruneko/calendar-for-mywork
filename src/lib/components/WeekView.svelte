@@ -8,7 +8,7 @@
 
 import { DateTime } from 'luxon';
 import type { CalendarItem } from '../models';
-import { getWeekDays, formatTime, formatWeekday, formatDate, generateTimeSlots, snapToMinorTick, getItemStart, getItemEnd, itemContainsDay, isTimed, isAllDay, layoutWeekAllDay, type AllDayItem } from '../utils';
+import { getWeekDays, formatTime, formatWeekday, formatDate, generateTimeSlots, snapToMinorTick, getItemStart, getItemEnd, itemContainsDay, isTimed, isAllDay, isDeadlineTimed, isDeadlineDay, layoutWeekAllDay, type AllDayItem } from '../utils';
 
 // Z-index層管理は CSS変数で集中管理（demo/App.svelte の :global(:root) に定義）
 // このコメントは削除せず、開発者への注意喚起として残す
@@ -160,37 +160,47 @@ let currentTimeLine = $derived.by(() => {
 const ALLDAY_ITEM_HEIGHT = 24; // px（1レーンの高さ）
 const ALLDAY_PADDING = 4;      // px（レーン上下の余白）
 
-// allday 対象アイテム: isAllDay アイテム、または複数日にまたがる timed アイテム
+// allday 対象アイテム: isAllDay・isDeadlineDay アイテム、または複数日にまたがる timed アイテム
 let alldayItems = $derived.by((): AllDayItem[] => {
   if (!showAllDay) return [];
-  return items
+  const filtered = items
     .filter(item => {
       const s = getItemStart(item);
-      const e = getItemEnd(item);
+      const e = getItemEnd(item, 'local', minorTick);
       if (!s || !e) return false;
-      // allday アイテム、または複数日またがり timed アイテム
+      // allday アイテム
       if (isAllDay(item)) return true;
+      // 日単位 Deadline
+      if (isDeadlineDay(item)) return true;
+      // 複数日またがり timed アイテム
       if (isTimed(item) && !s.hasSame(e.minus({ seconds: 1 }), 'day')) return true;
       return false;
     })
-    .map(item => {
-      const s = getItemStart(item)!;
-      const e = getItemEnd(item)!;
-      let endDateStr: string;
-      if (isAllDay(item)) {
-        endDateStr = formatDate(e);
-      } else {
-        // timed の複数日アイテム: end は inclusive 時刻なので翌日 startOfDay を exclusive end とする
-        endDateStr = formatDate(e.plus({ days: 1 }).startOf('day'));
-      }
-      return {
-        id: item.id,
-        dateRange: {
-          start: formatDate(s),
-          endExclusive: endDateStr,
-        },
-      };
+    // 日単位 Deadline を先頭に優先ソート
+    .sort((a, b) => {
+      const aDeadline = isDeadlineDay(a) ? 0 : 1;
+      const bDeadline = isDeadlineDay(b) ? 0 : 1;
+      return aDeadline - bDeadline;
     });
+
+  return filtered.map(item => {
+    const s = getItemStart(item)!;
+    const e = getItemEnd(item, 'local', minorTick)!;
+    let endDateStr: string;
+    if (isAllDay(item) || isDeadlineDay(item)) {
+      endDateStr = formatDate(e);
+    } else {
+      // timed の複数日アイテム: end は inclusive 時刻なので翌日 startOfDay を exclusive end とする
+      endDateStr = formatDate(e.plus({ days: 1 }).startOf('day'));
+    }
+    return {
+      id: item.id,
+      dateRange: {
+        start: formatDate(s),
+        endExclusive: endDateStr,
+      },
+    };
+  });
 });
 
 // allday レーンレイアウトを計算
@@ -257,6 +267,7 @@ type PositionedItem = CalendarItem & {
   styleStr: string;   // 最終的な style 文字列
   clipTop: boolean;   // 開始時刻が startHour より前（上端クリップ）
   clipBottom: boolean; // 終了時刻が endHour より後（下端クリップ）
+  isDeadline: boolean; // 分単位 Deadline（CalendarDateTimePoint）
 };
 
 let weekLayout = $derived.by((): Map<number, PositionedItem[]> => {
@@ -267,14 +278,14 @@ let weekLayout = $derived.by((): Map<number, PositionedItem[]> => {
   // dayIndex → CalendarItem[] のマップを作る
   const dayItems: CalendarItem[][] = weekDays.map(day =>
     items.filter(item => {
-      if (!isTimed(item)) return false;
-      // 複数日またがりアイテムはグリッドに表示しない
-      const s = getItemStart(item);
-      const e = getItemEnd(item);
+      // timed または分単位 Deadline のみ
+      if (!isTimed(item) && !isDeadlineTimed(item)) return false;
+      // 複数日またがりアイテムはグリッドに表示しない（分単位 Deadline は単一時刻なので常に単日）
+      const s = getItemStart(item, 'local', minorTick);
+      const e = getItemEnd(item, 'local', minorTick);
       if (s && e && !s.hasSame(e.minus({ seconds: 1 }), 'day')) return false;
       if (!itemContainsDay(item, day)) return false;
       // 表示時刻範囲の完全外側にあるアイテムは除外
-      // アイテムの終了時刻 ≤ startHour、または開始時刻 ≥ endHour
       const dayStart = day.startOf('day');
       const rangeStart = dayStart.set({ hour: startHour, minute: 0, second: 0, millisecond: 0 });
       const rangeEnd = dayStart.set({ hour: 0, minute: 0, second: 0, millisecond: 0 }).plus({ hours: endHour });
@@ -386,6 +397,7 @@ let weekLayout = $derived.by((): Map<number, PositionedItem[]> => {
             styleStr,
             clipTop,
             clipBottom,
+            isDeadline: isDeadlineTimed(item),
           });
         });
       });
@@ -978,8 +990,11 @@ function applyDefaultOpacity(color: string | undefined, opacity: number): string
 
 // アイテムのCSSクラスを取得
 function getItemClass(item: CalendarItem): string {
+  if (item.type === 'deadline') {
+    return 'calendar-item deadline';
+  }
   if (item.type === 'task') {
-    const task = item as any; // Type assertion needed since status only exists on Task
+    const task = item as any;
     return `calendar-item task task-${task.status}`;
   }
   return 'calendar-item appointment';
@@ -1179,9 +1194,10 @@ function getItemClass(item: CalendarItem): string {
                   <div
                     class="allday-item"
                     class:dragging={alldayDraggedItem?.id === p.item.id}
+                    class:deadline-day={p.item.type === 'deadline'}
                     draggable="true"
                     data-span={p.span}
-                    style="top: {p.top}px; left: {p.left}; width: {p.width}; background-color: {getItemBgColor(p.item)};"
+                    style="top: {p.top}px; left: {p.left}; width: {p.width}; background-color: {p.item.type === 'deadline' ? `color-mix(in srgb, #ef4444 ${defaultColorOpacity * 100}%, transparent)` : getItemBgColor(p.item)}; {p.item.type === 'deadline' ? 'color: #7f1d1d;' : ''}"
                     ondragstart={(e) => handleAlldayDragStart(e, p.item, p.startIndex)}
                     ondragend={handleAlldayDragEnd}
                     ondragover={(e) => {
@@ -1214,17 +1230,28 @@ function getItemClass(item: CalendarItem): string {
                     role="button"
                     tabindex="0"
                   >
-                    <!-- 左端リサイズハンドル -->
-                    <div
-                      class="allday-resize-handle allday-resize-handle-left"
-                      onmousedown={(e) => handleAlldayResizeStart(e, p.item, 'left')}
-                    ></div>
-                    <div class="allday-bar-content">{p.item.title}</div>
-                    <!-- 右端リサイズハンドル -->
-                    <div
-                      class="allday-resize-handle allday-resize-handle-right"
-                      onmousedown={(e) => handleAlldayResizeStart(e, p.item, 'right')}
-                    ></div>
+                    {#if p.item.type === 'deadline'}
+                      <!-- 日単位 Deadline: ↓アイコン + タイトル（赤背景） -->
+                      <span class="deadline-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M12 5v13M5 12l7 7 7-7"/>
+                        </svg>
+                      </span>
+                      <div class="allday-bar-content">{p.item.title}</div>
+                    {:else}
+                      <!-- 通常 allday アイテム -->
+                      <!-- 左端リサイズハンドル -->
+                      <div
+                        class="allday-resize-handle allday-resize-handle-left"
+                        onmousedown={(e) => handleAlldayResizeStart(e, p.item, 'left')}
+                      ></div>
+                      <div class="allday-bar-content">{p.item.title}</div>
+                      <!-- 右端リサイズハンドル -->
+                      <div
+                        class="allday-resize-handle allday-resize-handle-right"
+                        onmousedown={(e) => handleAlldayResizeStart(e, p.item, 'right')}
+                      ></div>
+                    {/if}
                   </div>
                 {/each}
               </div>
@@ -1287,54 +1314,76 @@ function getItemClass(item: CalendarItem): string {
           <div class="items-container" style="right: {itemRightMargin}px;">
             {#each weekLayout.get(dayIndex) ?? [] as item (item.id)}
               <div
-                class="{getItemClass(item)} {draggedItem?.id === item.id ? 'dragging' : ''} {item.clipTop ? 'clip-top' : ''} {item.clipBottom ? 'clip-bottom' : ''}"
+                class="{getItemClass(item)} {draggedItem?.id === item.id ? 'dragging' : ''} {item.clipTop ? 'clip-top' : ''} {item.clipBottom ? 'clip-bottom' : ''} {item.isDeadline ? 'deadline-timed' : ''}"
                 style={item.styleStr}
                 draggable="true"
                 ondragstart={(e) => handleDragStart(e, item)}
                 ondragend={handleDragEnd}
               >
-                <!-- リサイズハンドル（上端）- clipTop のときは表示しない -->
-                {#if !item.clipTop}
-                  <div 
-                    class="resize-handle resize-handle-top"
-                    onmousedown={(e) => handleResizeStart(e, item, 'top')}
-                    ondragstart={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                    draggable="false"
-                    role="slider"
-                    aria-label="開始時刻を変更"
-                  ></div>
-                {/if}
-                
-                <!-- アイテム本体（クリック可能） -->
-                <div
-                  class="item-content"
-                  onclick={(e) => { e.stopPropagation(); handleItemClick(item); }}
-                  onkeydown={(e) => e.key === 'Enter' && handleItemClick(item)}
-                  role="button"
-                  tabindex="0"
-                >
-                  {#if showParent && item.parents && item.parents.length > 0}
-                    {@const index = parentDisplayIndex >= 0 && parentDisplayIndex < item.parents.length ? parentDisplayIndex : item.parents.length - 1}
-                    <div class="item-parent">{item.parents[index]}</div>
+                {#if item.isDeadline}
+                  <!-- 分単位 Deadline: ↓アイコン + タイトル（下辺罫線のみ） -->
+                  <div
+                    class="item-content deadline-content"
+                    onclick={(e) => { e.stopPropagation(); handleItemClick(item); }}
+                    onkeydown={(e) => e.key === 'Enter' && handleItemClick(item)}
+                    role="button"
+                    tabindex="0"
+                  >
+                    <span class="deadline-icon">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 5v13M5 12l7 7 7-7"/>
+                      </svg>
+                    </span>
+                    <span class="deadline-title">{item.title}</span>
+                    {#if item.temporal.kind === 'CalendarDateTimePoint'}
+                      <span class="deadline-time">{formatTime(item.temporal.at)}</span>
+                    {/if}
+                  </div>
+                {:else}
+                  <!-- 通常アイテム -->
+                  <!-- リサイズハンドル（上端）- clipTop のときは表示しない -->
+                  {#if !item.clipTop}
+                    <div 
+                      class="resize-handle resize-handle-top"
+                      onmousedown={(e) => handleResizeStart(e, item, 'top')}
+                      ondragstart={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                      draggable="false"
+                      role="slider"
+                      aria-label="開始時刻を変更"
+                    ></div>
                   {/if}
-                  <div class="item-title">{item.title}</div>
-                  {#if item.temporal.kind === 'CalendarDateTimeRange'}
-                    <div class="item-time">
-                      {formatTime(item.temporal.start)} - {formatTime(item.temporal.end)}
-                    </div>
+                  
+                  <!-- アイテム本体（クリック可能） -->
+                  <div
+                    class="item-content"
+                    onclick={(e) => { e.stopPropagation(); handleItemClick(item); }}
+                    onkeydown={(e) => e.key === 'Enter' && handleItemClick(item)}
+                    role="button"
+                    tabindex="0"
+                  >
+                    {#if showParent && item.parents && item.parents.length > 0}
+                      {@const index = parentDisplayIndex >= 0 && parentDisplayIndex < item.parents.length ? parentDisplayIndex : item.parents.length - 1}
+                      <div class="item-parent">{item.parents[index]}</div>
+                    {/if}
+                    <div class="item-title">{item.title}</div>
+                    {#if item.temporal.kind === 'CalendarDateTimeRange'}
+                      <div class="item-time">
+                        {formatTime(item.temporal.start)} - {formatTime(item.temporal.end)}
+                      </div>
+                    {/if}
+                  </div>
+                  
+                  <!-- リサイズハンドル（下端）- clipBottom のときは表示しない -->
+                  {#if !item.clipBottom}
+                    <div 
+                      class="resize-handle resize-handle-bottom"
+                      onmousedown={(e) => handleResizeStart(e, item, 'bottom')}
+                      ondragstart={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                      draggable="false"
+                      role="slider"
+                      aria-label="終了時刻を変更"
+                    ></div>
                   {/if}
-                </div>
-                
-                <!-- リサイズハンドル（下端）- clipBottom のときは表示しない -->
-                {#if !item.clipBottom}
-                  <div 
-                    class="resize-handle resize-handle-bottom"
-                    onmousedown={(e) => handleResizeStart(e, item, 'bottom')}
-                    ondragstart={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                    draggable="false"
-                    role="slider"
-                    aria-label="終了時刻を変更"
-                  ></div>
                 {/if}
               </div>
             {/each}
@@ -1639,6 +1688,59 @@ function getItemClass(item: CalendarItem): string {
 
   .allday-item:hover {
     opacity: 0.85;
+  }
+
+  /* ===== Deadline スタイル ===== */
+
+  /* 分単位 Deadline: 背景なし・下辺罫線のみ */
+  .calendar-item.deadline-timed {
+    background-color: transparent !important;
+    border: none !important;
+    border-bottom: 2px solid #ef4444 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .deadline-content {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 0 4px;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .deadline-icon {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    color: #ef4444;
+  }
+
+  .deadline-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: #7f1d1d;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+  }
+
+  .deadline-time {
+    font-size: 10px;
+    color: #ef4444;
+    flex-shrink: 0;
+    margin-left: 2px;
+  }
+
+  /* 日単位 Deadline: allday バーの赤スタイル */
+  .allday-item.deadline-day {
+    font-weight: 600;
+  }
+
+  .allday-item.deadline-day .deadline-icon {
+    color: #7f1d1d;
   }
 
   /* allday リサイズハンドル（MonthView と同じスタイル） */

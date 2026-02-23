@@ -106,13 +106,39 @@ type TemporalAppointmentParams = WithTemporal & {
   dateRange?: never;
 };
 
+/** 分単位Deadline引数（shorthand: at: DateTime） */
+type TimedDeadlineParams = CommonFields & {
+  type: 'deadline';
+  at: DateTime;
+  datePoint?: never;
+  temporal?: never;
+  status?: never;
+  start?: never;
+  end?: never;
+  dateRange?: never;
+};
+
+/** 日単位Deadline引数（shorthand: datePoint: ISODate） */
+type DayDeadlineParams = CommonFields & {
+  type: 'deadline';
+  datePoint: ISODate;
+  at?: never;
+  temporal?: never;
+  status?: never;
+  start?: never;
+  end?: never;
+  dateRange?: never;
+};
+
 /** Deadline引数（temporal 直接指定） */
-type DeadlineParams = WithTemporal & {
+type TemporalDeadlineParams = WithTemporal & {
   type: 'deadline';
   status?: never;
   start?: never;
   end?: never;
   dateRange?: never;
+  at?: never;
+  datePoint?: never;
 };
 
 export type CalendarItemParams =
@@ -122,7 +148,9 @@ export type CalendarItemParams =
   | TimedAppointmentParams
   | AllDayAppointmentParams
   | TemporalAppointmentParams
-  | DeadlineParams;
+  | TimedDeadlineParams
+  | DayDeadlineParams
+  | TemporalDeadlineParams;
 
 // ===== 内部ヘルパー =====
 
@@ -152,6 +180,14 @@ function buildCommon(params: CommonFields): Omit<CalendarItem, 'type' | 'tempora
 function buildTemporal(params: CalendarItemParams): TimeSpan {
   if ('temporal' in params && params.temporal) {
     return params.temporal;
+  }
+  // 分単位 Deadline shorthand: at: DateTime
+  if ('at' in params && params.at instanceof DateTime) {
+    return createCalendarDateTimePoint(params.at);
+  }
+  // 日単位 Deadline shorthand: datePoint: ISODate
+  if ('datePoint' in params && params.datePoint) {
+    return createCalendarDatePoint(params.datePoint as ISODate);
   }
   if ('start' in params && params.start && 'end' in params && params.end) {
     return createCalendarDateTimeRange(params.start as DateTime, params.end as DateTime);
