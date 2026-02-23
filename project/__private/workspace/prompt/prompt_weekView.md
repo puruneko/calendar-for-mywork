@@ -9,21 +9,65 @@ Do not begin work before initialization.
 Report READY when governance is loaded.
 
 
+# ノウハウ
+- SVGアイコン
+  - https://www.webcreatorbox.com/blog/svg-icons-patterns-illustration
+  - https://iconsvg.xyz/
+  - https://www.ikonate.com/
+  - https://www.svgbackgrounds.com/
+
+
 # 残
 
+- [ ] -
 
 
 # weekView
 
 
+─── request ──────────────────────
+─── request ──────────────────────
+─── request ──────────────────────
+─── request ──────────────────────
+─── request ──────────────────────
+─── request ──────────────────────
+─── request ──────────────────────
+─── request ──────────────────────
+─── request ──────────────────────
+─── request ──────────────────────
+
+- 006
+	- deadlineタイプのItemを新規作成します
+	- deadlineタイプのItemは期限を表すItemです
+	- 期限は分単位と日単位があります。
+	- 分単位の場合は、minorTick分描画スペースを確保し、bottomだけ罫線が引かれる見た目です。
+		- 普通のItemと同じように描画スペースを確保するので、重なるItemがあるときは他と同じように横幅が調整されます
+	- 日単位の場合は、1日のAllDayItemと同じように描画されますが、先頭に表示され背景は赤です。
+
+- 
+
 
 
 ─── request ──────────────────────
 
-- [ ] alldayレーンを作成
+- 0005
+  - 設定画面をモーダルではなくナビゲーションメニューのような感じでボタンを押すと下に設定メニューが表示されるようなＵＩにして。weekViewもmonthViewもどちらも。文字などはカレンダー本体より少し小さめにして。
+  - 設定ボタンのアイコンはこれにして
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
 
 
 ─── request ──────────────────────
+
+
+- 0003
+  - ３点リーダーではなく下記SVGを表示するようにして。SVGの高さはpaddingを超えないよう描画時に調整して。３点リーダーの時と同じように中央に表示されるようにして
+    - above
+      - <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 11l-5-5-5 5M17 18l-5-5-5 5"/></svg>
+    - below
+      - <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 13l5 5 5-5M7 6l5 5 5-5"/></svg>
+  - このSVGをクリックすると、その予定が全部表示されるよう表示開始終了時刻をmajorTick単位で変更して（19:30なら20時に設定）。日跨ぎの場合も考えられるので、変更の最小最大値はそれぞれ0時と24時にし、バグらないようにして。
+
+
 ─── request ──────────────────────
 
 - 0004
