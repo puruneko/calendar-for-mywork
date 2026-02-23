@@ -65,14 +65,14 @@ test.describe('MonthView - カラム同期', () => {
     await page.locator('button.settings-button').click();
     await page.waitForTimeout(200);
 
-    // MonthSettingsModalの「土日を表示する」チェックボックス
-    const weekendLabel = page.locator('.modal-content label', { hasText: '土日を表示' });
+    // インラインパネルの「土日を表示」チェックボックス
+    const weekendLabel = page.locator('.settings-panel label', { hasText: '土日を表示' });
     const weekendInput = weekendLabel.locator('input[type="checkbox"]');
     await weekendInput.uncheck();
     await page.waitForTimeout(300);
 
-    // モーダルを閉じる
-    await page.locator('.modal-content .close-button').click();
+    // パネルを閉じる
+    await page.locator('button.settings-button').click();
     await page.waitForTimeout(300);
 
     // 列同期確認（5列）
@@ -105,13 +105,13 @@ test.describe('MonthView - カラム同期', () => {
     await page.waitForTimeout(200);
 
     // 終日タスク非表示に切り替え
-    const alldayLabel = page.locator('.modal-content label', { hasText: '終日タスク' });
+    const alldayLabel = page.locator('.settings-panel label', { hasText: '終日タスク' });
     const alldayInput = alldayLabel.locator('input[type="checkbox"]');
     await alldayInput.uncheck();
     await page.waitForTimeout(300);
 
-    // モーダルを閉じる
-    await page.locator('.modal-content .close-button').click();
+    // パネルを閉じる
+    await page.locator('button.settings-button').click();
     await page.waitForTimeout(300);
 
     // 列同期確認

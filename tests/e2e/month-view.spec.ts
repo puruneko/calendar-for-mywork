@@ -1049,14 +1049,13 @@ test.describe('MonthView - 設定パネル', () => {
 
   test('設定ボタンをクリックすると設定パネルが開くこと', async ({ page }) => {
     await page.click('.settings-button');
-    await expect(page.locator('.modal-content')).toBeVisible();
-    await expect(page.locator('h2:has-text("月表示の設定")')).toBeVisible();
+    await expect(page.locator('.settings-panel')).toBeVisible();
   });
 
   test('土日トグルOFF: JSエラーなし・5列グリッド表示', async ({ page }) => {
     await page.click('.settings-button');
-    await expect(page.locator('.modal-content')).toBeVisible();
-    const showWeekendCheckbox = page.locator('input[type="checkbox"]').nth(0);
+    await expect(page.locator('.settings-panel')).toBeVisible();
+    const showWeekendCheckbox = page.locator('.settings-panel input[type="checkbox"]').nth(0);
     await showWeekendCheckbox.uncheck();
     await page.waitForTimeout(300);
     const weekdayCells = page.locator('.weekday');
@@ -1065,7 +1064,7 @@ test.describe('MonthView - 設定パネル', () => {
 
   test('土日トグルOFF→ON: JSエラーなし・7列グリッド表示', async ({ page }) => {
     await page.click('.settings-button');
-    const showWeekendCheckbox = page.locator('input[type="checkbox"]').nth(0);
+    const showWeekendCheckbox = page.locator('.settings-panel input[type="checkbox"]').nth(0);
     await showWeekendCheckbox.uncheck();
     await page.waitForTimeout(200);
     await showWeekendCheckbox.check();
@@ -1076,7 +1075,7 @@ test.describe('MonthView - 設定パネル', () => {
 
   test('終日タスクトグルOFF: JSエラーなし・allday-item非表示', async ({ page }) => {
     await page.click('.settings-button');
-    const showAllDayCheckbox = page.locator('input[type="checkbox"]').nth(1);
+    const showAllDayCheckbox = page.locator('.settings-panel input[type="checkbox"]').nth(1);
     await showAllDayCheckbox.uncheck();
     await page.waitForTimeout(300);
     const alldayItems = page.locator('.allday-item');
@@ -1085,7 +1084,7 @@ test.describe('MonthView - 設定パネル', () => {
 
   test('単日アイテムトグルOFF: JSエラーなし・single-day-item非表示', async ({ page }) => {
     await page.click('.settings-button');
-    const showSingleDayCheckbox = page.locator('input[type="checkbox"]').nth(2);
+    const showSingleDayCheckbox = page.locator('.settings-panel input[type="checkbox"]').nth(2);
     await showSingleDayCheckbox.uncheck();
     await page.waitForTimeout(300);
     const singleDayItems = page.locator('.single-day-item');
@@ -1096,7 +1095,7 @@ test.describe('MonthView - 設定パネル', () => {
     const cellBefore = await page.locator('.grid-cell').first().boundingBox();
     expect(cellBefore).toBeTruthy();
     await page.click('.settings-button');
-    const input = page.locator('input[type="number"]');
+    const input = page.locator('.settings-panel input[type="number"]').first();
     await input.fill('3');
     await input.blur();
     await page.waitForTimeout(300);

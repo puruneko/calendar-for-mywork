@@ -145,10 +145,11 @@ interface Appointment extends CalendarItem {
 {
   items: CalendarItem[];           // 表示するアイテム
   currentDate: DateTime;           // 表示基準日
-  startHour?: number;              // 表示開始時刻（デフォルト: 8）
-  endHour?: number;                // 表示終了時刻（デフォルト: 20）
+  startHour?: number;              // 表示開始時刻（デフォルト: 0）
+  endHour?: number;                // 表示終了時刻（デフォルト: 24）
   majorTick?: number;              // メジャーグリッド線の間隔（デフォルト: 60分）
   minorTick?: number;              // マイナーグリッド線の間隔、DnD移動単位（デフォルト: 15分）
+  dayChangeThreshold?: number;     // DnD列変更閾値（デフォルト: 0.75）
   showWeekend?: boolean;           // 週末表示（デフォルト: true）
   showAllDay?: boolean;            // 全日イベント表示（デフォルト: true）
   defaultColorOpacity?: number;    // デフォルト色の透明度（デフォルト: 0.5）
@@ -190,40 +191,40 @@ interface Appointment extends CalendarItem {
 {
   items: CalendarItem[];
   currentDate: DateTime;
+  maxItemsPerDay?: number;         // 1日の最大表示件数（デフォルト: 6）
+  weekStartsOn?: number;           // 週開始曜日（1=月曜、デフォルト: 1）
+  showWeekend?: boolean;           // 週末表示（デフォルト: true）
+  showAllDay?: boolean;            // 全日イベント表示（デフォルト: true）
+  showSingleDay?: boolean;         // 単日アイテム表示（デフォルト: true）
   onItemClick?: (item: CalendarItem) => void;
+  onItemMove?: (item: CalendarItem, newStart: DateTime, newEnd: DateTime) => void;
+  onItemResize?: (item: CalendarItem, newStart: DateTime, newEnd: DateTime) => void;
   onViewChange?: (date: DateTime) => void;
   onCellClick?: (dateTime: DateTime, clickPosition: { x: number; y: number }) => void;
   onDayClick?: (date: DateTime) => void;  // 日クリックで週表示へ切り替え
+  onSettingsChange?: (settings: { maxItemsPerDay: number; weekStartsOn: number; showWeekend: boolean; showAllDay: boolean; showSingleDay: boolean; }) => void;
 }
 ```
 
 **主要機能**:
-- 42日表示（6週間）
-- 複数日にまたがるアイテムの表示
-- オーバーレイ機能（進行中）
+- 月カレンダーグリッド描画（前後月の日も含む）
+- 複数日にまたがるアイテムのバー表示（allday レーン）
+- 単日アイテムの表示上限超過時のオーバーフロー展開パネル
+- DnD・リサイズ対応（allday バー）
+- 土日非表示（5列グリッド）対応
 
-### 4.4 SettingsModal.svelte
+### 4.4 設定インラインパネル（WeekView / MonthView 内蔵）
 
 **責務**:
-- カレンダー設定のUI
-- 設定値のバリデーション
+- ヘッダー内の設定ボタン（スライダーアイコン）をクリックするとヘッダー直下に展開
+- `SettingsModal.svelte` / `MonthSettingsModal.svelte` は廃止済み
+- 設定変更はリアルタイムで `onSettingsChange` イベント経由で通知
 
-**Props**:
-```typescript
-{
-  show: boolean;
-  settings: {
-    startHour: number;
-    endHour: number;
-    minorTick: number;
-    showWeekend: boolean;
-    showAllDay: boolean;
-    // ... その他の設定
-  };
-  onClose?: () => void;
-  onSave?: (settings: any) => void;
-}
-```
+**WeekView の設定項目**:
+- 移動単位（minorTick）、開始/終了時刻、土日表示、終日予定、透明度、週開始曜日、右余白、親階層表示
+
+**MonthView の設定項目**:
+- 1日の最大表示件数、週開始曜日、土日表示、終日タスク、単日アイテム表示
 
 ## 5. レンダリング戦略
 
@@ -349,52 +350,28 @@ interface Appointment extends CalendarItem {
 ## 10. テスト戦略
 
 ### 10.1 単体テスト (Vitest)
-**実装済み: 33件**
+**実装済み: 126件**
 
-- **dateUtils (10件)**
-  - 週の日付取得
-  - 時間スロット生成
-  - 時刻フォーマット
-  - スナップ処理
-
-- **dndUtils (23件)**
-  - DnD位置計算
-  - 時間変換
-  - スナップ処理
-  - 重複チェック
+- **dateUtils**: 週の日付取得・時間スロット生成・時刻フォーマット・スナップ処理
+- **dndUtils**: DnD位置計算・時間変換・スナップ処理・重複チェック
+- **factories**: `createCalendarItem` / `updateTimedItem` / `updateAllDayItem` の生成・バリデーション
+- **laneLayoutAlgorithm**: allday レーンの重複判定・レーン割り当て
+- **validation**: CalendarItem バリデーション
 
 ### 10.2 E2Eテスト (Playwright)
-**実装済み: 7ファイル**
+**実装済み: 10ファイル**
 
-- **calendar.spec.ts**: 基本カレンダー機能
-  - アイテム表示
-  - クリックイベント
-  - ナビゲーション
-
-- **custom-style.spec.ts**: カスタムスタイル機能
-  - アイテム単位のスタイル適用
-  - 色/透明度のカスタマイズ
-
-- **dnd.spec.ts**: ドラッグ&ドロップ
-  - アイテム移動
-  - スナップ処理
-  - イベント発火
-
-- **month-view.spec.ts**: 月表示
-  - 月カレンダー表示
-  - 日クリック → 週表示切り替え
-
-- **resize-and-settings.spec.ts**: リサイズと設定
-  - リサイズハンドル操作
-  - 設定モーダル
-
-- **resize.spec.ts**: リサイズ機能詳細
-  - 上端/下端ハンドル
-  - 時間調整
-
-- **tick-and-timeline.spec.ts**: 時間軸
-  - majorTick/minorTick設定
-  - 現在時刻線表示
+- **calendar.spec.ts**: 基本カレンダー機能（アイテム表示・クリック・ナビゲーション）
+- **column-sync.spec.ts**: 週/月ビュー間の設定同期
+- **custom-style.spec.ts**: カスタムスタイル（アイテム単位の色/透明度）
+- **dnd.spec.ts**: ドラッグ&ドロップ（移動・スナップ・イベント発火）
+- **month-view.spec.ts**: 月表示（グリッド・日クリック・allday バー・展開パネル）
+- **month-view-resize.spec.ts**: 月表示での allday バーリサイズ
+- **overlay-hit-test.spec.ts**: 展開パネルのヒットテスト
+- **resize.spec.ts**: WeekView リサイズ（上端/下端ハンドル・時間調整）
+- **resize-and-settings.spec.ts**: リサイズと設定インラインパネル
+- **tick-and-timeline.spec.ts**: 時間軸（majorTick/minorTick・現在時刻線）
+- **weekview-item-position.spec.ts**: WeekView のアイテム配置・クリップ表示
 
 ## 10. ビルド成果物
 

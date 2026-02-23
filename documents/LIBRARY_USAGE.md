@@ -171,8 +171,8 @@ const items = [...tasks, ...appointments];
 | `items` | `CalendarItem[]` | ✔ | - | 表示するアイテムリスト |
 | `currentDate` | `DateTime` | ✔ | - | 表示基準日 |
 | `viewType` | `'week' \| 'month'` | - | `'week'` | 表示モード |
-| `startHour` | `number` | - | `8` | 表示開始時刻（0-23） |
-| `endHour` | `number` | - | `20` | 表示終了時刻（1-24） |
+| `startHour` | `number` | - | `0` | 表示開始時刻（0-23） |
+| `endHour` | `number` | - | `24` | 表示終了時刻（1-24） |
 | `minorTick` | `number` | - | `15` | マイナーグリッド線の間隔、DnD移動単位（分） |
 | `showWeekend` | `boolean` | - | `true` | 週末を表示するか |
 | `showAllDay` | `boolean` | - | `true` | 全日イベントを表示するか |
@@ -188,10 +188,11 @@ const items = [...tasks, ...appointments];
 |-----------|------|------|-----------|------|
 | `items` | `CalendarItem[]` | ✔ | - | 表示するアイテムリスト |
 | `currentDate` | `DateTime` | ✔ | - | 表示基準日（週の決定に使用） |
-| `startHour` | `number` | - | `8` | 表示開始時刻（0-23） |
-| `endHour` | `number` | - | `20` | 表示終了時刻（1-24） |
+| `startHour` | `number` | - | `0` | 表示開始時刻（0-23） |
+| `endHour` | `number` | - | `24` | 表示終了時刻（1-24） |
 | `majorTick` | `number` | - | `60` | メジャーグリッド線の間隔（分） |
 | `minorTick` | `number` | - | `15` | マイナーグリッド線の間隔、DnD移動単位（分） |
+| `dayChangeThreshold` | `number` | - | `0.75` | DnD列変更閾値（0.0-1.0） |
 | `showWeekend` | `boolean` | - | `true` | 週末を表示するか |
 | `showAllDay` | `boolean` | - | `true` | 全日イベントを表示するか |
 | `defaultColorOpacity` | `number` | - | `0.5` | デフォルト色の透明度（0.0-1.0） |
@@ -206,18 +207,23 @@ const items = [...tasks, ...appointments];
 |-----------|------|------|-----------|------|
 | `items` | `CalendarItem[]` | ✔ | - | 表示するアイテムリスト |
 | `currentDate` | `DateTime` | ✔ | - | 表示基準日 |
+| `maxItemsPerDay` | `number` | - | `6` | 1日の最大表示件数 |
+| `weekStartsOn` | `number` | - | `1` | 週開始曜日（1=月曜） |
+| `showWeekend` | `boolean` | - | `true` | 週末を表示するか |
+| `showAllDay` | `boolean` | - | `true` | 全日イベントを表示するか |
+| `showSingleDay` | `boolean` | - | `true` | 単日アイテムを表示するか |
 
 ### Events（共通）
 
 | イベント | 型 | 説明 |
 |---------|------|------|
 | `onItemClick` | `(item: CalendarItem) => void` | アイテムがクリックされた時 |
-| `onItemMove` | `(item: CalendarItem, newStart: DateTime, newEnd: DateTime) => void` | アイテムがドラッグ移動された時（WeekView） |
-| `onItemResize` | `(item: CalendarItem, newStart: DateTime, newEnd: DateTime) => void` | アイテムがリサイズされた時（WeekView） |
+| `onItemMove` | `(item: CalendarItem, newStart: DateTime, newEnd: DateTime) => void` | アイテムがドラッグ移動された時（WeekView・MonthView） |
+| `onItemResize` | `(item: CalendarItem, newStart: DateTime, newEnd: DateTime) => void` | アイテムがリサイズされた時（WeekView・MonthView） |
 | `onViewChange` | `(newDate: DateTime) => void` | 週/月の表示が変更された時 |
 | `onCellClick` | `(dateTime: DateTime, clickPosition: { x: number; y: number }) => void` | セルがクリックされた時 |
 | `onDayClick` | `(date: DateTime) => void` | 日がクリックされた時（MonthView） |
-| `onSettingsChange` | `(settings: any) => void` | 設定が変更された時（WeekView） |
+| `onSettingsChange` | WeekView: `(settings: { minorTick, startHour, endHour, showWeekend, showAllDay, defaultColorOpacity, weekStartsOn, itemRightMargin, showParent, parentDisplayIndex }) => void`<br>MonthView: `(settings: { maxItemsPerDay, weekStartsOn, showWeekend, showAllDay, showSingleDay }) => void` | 設定が変更された時 |
 | `onViewTypeChange` | `(viewType: 'week' \| 'month') => void` | 表示モードが変更された時（CalendarView） |
 
 ## データモデル

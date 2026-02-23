@@ -9,7 +9,6 @@
 import { DateTime } from 'luxon';
 import type { CalendarItem } from '../models';
 import { getWeekDays, formatTime, formatWeekday, formatDate, generateTimeSlots, snapToMinorTick, getItemStart, getItemEnd, itemContainsDay, isTimed, isAllDay, layoutWeekAllDay, type AllDayItem } from '../utils';
-import SettingsModal from './SettingsModal.svelte';
 
 // Z-index層管理は CSS変数で集中管理（demo/App.svelte の :global(:root) に定義）
 // このコメントは削除せず、開発者への注意喚起として残す
@@ -990,11 +989,17 @@ function getItemClass(item: CalendarItem): string {
 <div class="week-view">
   <!-- ヘッダー: ナビゲーションと週表示 -->
   <div class="week-header">
-    <button class="nav-button settings-button" onclick={toggleSettings} title="設定">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="3"/>
-        <path d="M12 1v6m0 6v6M1 12h6m6 0h6"/>
-        <path d="m4.93 4.93 4.24 4.24m5.66 5.66 4.24 4.24M4.93 19.07l4.24-4.24m5.66-5.66 4.24-4.24"/>
+    <button class="nav-button settings-button" onclick={toggleSettings} title="設定" aria-expanded={showSettings}>
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="4" y1="21" x2="4" y2="14"></line>
+        <line x1="4" y1="10" x2="4" y2="3"></line>
+        <line x1="12" y1="21" x2="12" y2="12"></line>
+        <line x1="12" y1="8" x2="12" y2="3"></line>
+        <line x1="20" y1="21" x2="20" y2="16"></line>
+        <line x1="20" y1="12" x2="20" y2="3"></line>
+        <line x1="1" y1="14" x2="7" y2="14"></line>
+        <line x1="9" y1="8" x2="15" y2="8"></line>
+        <line x1="17" y1="16" x2="23" y2="16"></line>
       </svg>
     </button>
     <button class="nav-button" onclick={goToPreviousWeek}>◀</button>
@@ -1005,22 +1010,113 @@ function getItemClass(item: CalendarItem): string {
     </span>
   </div>
   
-  <!-- 設定モーダル -->
+  <!-- 設定インラインパネル -->
   {#if showSettings}
-    <SettingsModal
-      {minorTick}
-      {startHour}
-      {endHour}
-      {showWeekend}
-      {showAllDay}
-      {defaultColorOpacity}
-      {weekStartsOn}
-      {itemRightMargin}
-      {showParent}
-      {parentDisplayIndex}
-      onClose={toggleSettings}
-      onChange={handleSettingsChange}
-    />
+    <div class="settings-panel">
+      <div class="settings-panel-inner">
+        <!-- 移動単位 -->
+        <div class="setting-item">
+          <label for="wv-minorTick">移動単位（分）</label>
+          <input id="wv-minorTick" type="number" value={minorTick} min="1" max="60" step="1"
+            onblur={(e) => {
+              const v = parseInt((e.currentTarget as HTMLInputElement).value);
+              if (v > 0 && v <= 60 && 60 % v === 0) handleSettingsChange({ minorTick: v, startHour, endHour, showWeekend, showAllDay, defaultColorOpacity, weekStartsOn, itemRightMargin, showParent, parentDisplayIndex });
+              else (e.currentTarget as HTMLInputElement).value = String(minorTick);
+            }}
+          />
+          <span class="hint">60の約数（例: 5, 10, 15, 30）</span>
+        </div>
+        <!-- 開始時刻 -->
+        <div class="setting-item">
+          <label for="wv-startHour">開始時刻（時）</label>
+          <input id="wv-startHour" type="number" value={startHour} min="0" max="23" step="1"
+            onblur={(e) => {
+              const v = parseInt((e.currentTarget as HTMLInputElement).value);
+              if (Number.isInteger(v) && v >= 0 && v < endHour) handleSettingsChange({ minorTick, startHour: v, endHour, showWeekend, showAllDay, defaultColorOpacity, weekStartsOn, itemRightMargin, showParent, parentDisplayIndex });
+              else (e.currentTarget as HTMLInputElement).value = String(startHour);
+            }}
+          />
+        </div>
+        <!-- 終了時刻 -->
+        <div class="setting-item">
+          <label for="wv-endHour">終了時刻（時）</label>
+          <input id="wv-endHour" type="number" value={endHour} min="1" max="24" step="1"
+            onblur={(e) => {
+              const v = parseInt((e.currentTarget as HTMLInputElement).value);
+              if (Number.isInteger(v) && v > startHour && v <= 24) handleSettingsChange({ minorTick, startHour, endHour: v, showWeekend, showAllDay, defaultColorOpacity, weekStartsOn, itemRightMargin, showParent, parentDisplayIndex });
+              else (e.currentTarget as HTMLInputElement).value = String(endHour);
+            }}
+          />
+        </div>
+        <!-- 土日表示 -->
+        <div class="setting-item setting-item-inline">
+          <label>
+            <input type="checkbox" checked={showWeekend}
+              onchange={(e) => handleSettingsChange({ minorTick, startHour, endHour, showWeekend: (e.currentTarget as HTMLInputElement).checked, showAllDay, defaultColorOpacity, weekStartsOn, itemRightMargin, showParent, parentDisplayIndex })}
+            />
+            土日を表示
+          </label>
+        </div>
+        <!-- 終日予定 -->
+        <div class="setting-item setting-item-inline">
+          <label>
+            <input type="checkbox" checked={showAllDay}
+              onchange={(e) => handleSettingsChange({ minorTick, startHour, endHour, showWeekend, showAllDay: (e.currentTarget as HTMLInputElement).checked, defaultColorOpacity, weekStartsOn, itemRightMargin, showParent, parentDisplayIndex })}
+            />
+            終日予定を表示
+          </label>
+        </div>
+        <!-- 透明度 -->
+        <div class="setting-item">
+          <label for="wv-opacity">アイテムの透明度</label>
+          <div class="setting-row">
+            <input id="wv-opacity" type="range" min="0" max="1" step="0.05" value={defaultColorOpacity}
+              oninput={(e) => handleSettingsChange({ minorTick, startHour, endHour, showWeekend, showAllDay, defaultColorOpacity: parseFloat((e.currentTarget as HTMLInputElement).value), weekStartsOn, itemRightMargin, showParent, parentDisplayIndex })}
+            />
+            <span class="setting-value">{Math.round(defaultColorOpacity * 100)}%</span>
+          </div>
+        </div>
+        <!-- 週の開始曜日 -->
+        <div class="setting-item">
+          <label for="wv-weekStartsOn">週の開始曜日</label>
+          <select id="wv-weekStartsOn" value={weekStartsOn}
+            onchange={(e) => handleSettingsChange({ minorTick, startHour, endHour, showWeekend, showAllDay, defaultColorOpacity, weekStartsOn: parseInt((e.currentTarget as HTMLSelectElement).value), itemRightMargin, showParent, parentDisplayIndex })}
+          >
+            <option value={1}>月曜日</option>
+            <option value={2}>火曜日</option>
+            <option value={3}>水曜日</option>
+            <option value={4}>木曜日</option>
+            <option value={5}>金曜日</option>
+            <option value={6}>土曜日</option>
+            <option value={7}>日曜日</option>
+          </select>
+        </div>
+        <!-- アイテム右余白 -->
+        <div class="setting-item">
+          <label for="wv-itemRightMargin">アイテム右余白 (px)</label>
+          <input id="wv-itemRightMargin" type="number" min="0" max="50" value={itemRightMargin}
+            onchange={(e) => handleSettingsChange({ minorTick, startHour, endHour, showWeekend, showAllDay, defaultColorOpacity, weekStartsOn, itemRightMargin: parseInt((e.currentTarget as HTMLInputElement).value), showParent, parentDisplayIndex })}
+          />
+        </div>
+        <!-- 親階層表示 -->
+        <div class="setting-item setting-item-inline">
+          <label>
+            <input type="checkbox" checked={showParent}
+              onchange={(e) => handleSettingsChange({ minorTick, startHour, endHour, showWeekend, showAllDay, defaultColorOpacity, weekStartsOn, itemRightMargin, showParent: (e.currentTarget as HTMLInputElement).checked, parentDisplayIndex })}
+            />
+            親階層を表示
+          </label>
+        </div>
+        <!-- 親階層インデックス -->
+        <div class="setting-item">
+          <label for="wv-parentIndex">親階層のインデックス</label>
+          <input id="wv-parentIndex" type="number" value={parentDisplayIndex}
+            onchange={(e) => handleSettingsChange({ minorTick, startHour, endHour, showWeekend, showAllDay, defaultColorOpacity, weekStartsOn, itemRightMargin, showParent, parentDisplayIndex: parseInt((e.currentTarget as HTMLInputElement).value) })}
+          />
+          <span class="hint">-1で最後の親を表示</span>
+        </div>
+      </div>
+    </div>
   {/if}
 
   <!-- カレンダーグリッド -->
@@ -1334,6 +1430,80 @@ function getItemClass(item: CalendarItem): string {
   .nav-button.settings-button:hover {
     background: #e3f2fd;
     border-color: #2196f3;
+  }
+
+  /* 設定インラインパネル */
+  .settings-panel {
+    border-bottom: 1px solid var(--calendar-grid-color, #e0e0e0);
+    background: #fafafa;
+  }
+
+  .settings-panel-inner {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 20px;
+    padding: 8px 16px;
+    align-items: flex-end;
+  }
+
+  .setting-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 100px;
+  }
+
+  .setting-item-inline {
+    justify-content: flex-end;
+    padding-bottom: 4px;
+  }
+
+  .setting-item label {
+    font-size: 11px;
+    color: #666;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .setting-item input[type="number"],
+  .setting-item select {
+    font-size: 12px;
+    padding: 3px 6px;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    background: white;
+    width: 80px;
+  }
+
+  .setting-item input[type="number"]:focus,
+  .setting-item select:focus {
+    outline: none;
+    border-color: #2196f3;
+  }
+
+  .setting-item input[type="checkbox"] {
+    margin-right: 4px;
+  }
+
+  .setting-item .hint {
+    font-size: 10px;
+    color: #999;
+  }
+
+  .setting-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .setting-row input[type="range"] {
+    width: 80px;
+  }
+
+  .setting-value {
+    font-size: 11px;
+    color: #666;
+    min-width: 32px;
   }
 
   .week-title {

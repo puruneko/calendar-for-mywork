@@ -3,7 +3,6 @@ import { DateTime } from 'luxon';
 import { tick } from 'svelte';
 import type { CalendarItem } from '../models';
 import { formatTime, getItemStart, getItemEnd, itemContainsDay, isTimed, layoutWeekAllDay, type AllDayItem, formatDate } from '../utils';
-import MonthSettingsModal from './MonthSettingsModal.svelte';
 
 type Props = {
   items?: CalendarItem[];
@@ -776,27 +775,20 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
 </script>
 
 <div class="month-view">
-  <!-- 設定モーダル -->
-  {#if showSettings}
-    <MonthSettingsModal
-      {maxItemsPerDay}
-      {weekStartsOn}
-      {showWeekend}
-      {showAllDay}
-      {showSingleDay}
-      onClose={() => { showSettings = false; }}
-      onChange={handleSettingsChange}
-    />
-  {/if}
-
   <!-- ヘッダー -->
   <div class="month-header">
     <div class="header-left">
-      <button class="settings-button" onclick={() => { showSettings = !showSettings; }} title="設定">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="3"/>
-          <path d="M12 1v6m0 6v6M1 12h6m6 0h6"/>
-          <path d="m4.93 4.93 4.24 4.24m5.66 5.66 4.24 4.24M4.93 19.07l4.24-4.24m5.66-5.66 4.24-4.24"/>
+      <button class="settings-button" onclick={() => { showSettings = !showSettings; }} title="設定" aria-expanded={showSettings}>
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="4" y1="21" x2="4" y2="14"></line>
+          <line x1="4" y1="10" x2="4" y2="3"></line>
+          <line x1="12" y1="21" x2="12" y2="12"></line>
+          <line x1="12" y1="8" x2="12" y2="3"></line>
+          <line x1="20" y1="21" x2="20" y2="16"></line>
+          <line x1="20" y1="12" x2="20" y2="3"></line>
+          <line x1="1" y1="14" x2="7" y2="14"></line>
+          <line x1="9" y1="8" x2="15" y2="8"></line>
+          <line x1="17" y1="16" x2="23" y2="16"></line>
         </svg>
       </button>
       <button class="nav-button" onclick={prevMonth}>&lt;</button>
@@ -805,6 +797,68 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     </div>
     <button class="today-button" onclick={goToToday}>Today</button>
   </div>
+
+  <!-- 設定インラインパネル -->
+  {#if showSettings}
+    <div class="settings-panel">
+      <div class="settings-panel-inner">
+        <!-- 1日の最大表示件数 -->
+        <div class="setting-item">
+          <label for="mv-maxItems">1日の最大表示件数</label>
+          <input id="mv-maxItems" type="number" value={maxItemsPerDay} min="1" max="20" step="1"
+            onblur={(e) => {
+              const v = parseInt((e.currentTarget as HTMLInputElement).value);
+              if (Number.isInteger(v) && v >= 1 && v <= 20) handleSettingsChange({ maxItemsPerDay: v, weekStartsOn, showWeekend, showAllDay, showSingleDay });
+              else (e.currentTarget as HTMLInputElement).value = String(maxItemsPerDay);
+            }}
+          />
+          <span class="hint">1〜20の整数</span>
+        </div>
+        <!-- 週の開始曜日 -->
+        <div class="setting-item">
+          <label for="mv-weekStartsOn">週の開始曜日</label>
+          <select id="mv-weekStartsOn" value={weekStartsOn}
+            onchange={(e) => handleSettingsChange({ maxItemsPerDay, weekStartsOn: parseInt((e.currentTarget as HTMLSelectElement).value), showWeekend, showAllDay, showSingleDay })}
+          >
+            <option value={1}>月曜日</option>
+            <option value={2}>火曜日</option>
+            <option value={3}>水曜日</option>
+            <option value={4}>木曜日</option>
+            <option value={5}>金曜日</option>
+            <option value={6}>土曜日</option>
+            <option value={7}>日曜日</option>
+          </select>
+        </div>
+        <!-- 土日表示 -->
+        <div class="setting-item setting-item-inline">
+          <label>
+            <input type="checkbox" checked={showWeekend}
+              onchange={(e) => handleSettingsChange({ maxItemsPerDay, weekStartsOn, showWeekend: (e.currentTarget as HTMLInputElement).checked, showAllDay, showSingleDay })}
+            />
+            土日を表示
+          </label>
+        </div>
+        <!-- 終日タスク -->
+        <div class="setting-item setting-item-inline">
+          <label>
+            <input type="checkbox" checked={showAllDay}
+              onchange={(e) => handleSettingsChange({ maxItemsPerDay, weekStartsOn, showWeekend, showAllDay: (e.currentTarget as HTMLInputElement).checked, showSingleDay })}
+            />
+            終日タスクを表示
+          </label>
+        </div>
+        <!-- 単日アイテム -->
+        <div class="setting-item setting-item-inline">
+          <label>
+            <input type="checkbox" checked={showSingleDay}
+              onchange={(e) => handleSettingsChange({ maxItemsPerDay, weekStartsOn, showWeekend, showAllDay, showSingleDay: (e.currentTarget as HTMLInputElement).checked })}
+            />
+            単日アイテムを表示
+          </label>
+        </div>
+      </div>
+    </div>
+  {/if}
 
   <!-- カレンダーコンテンツ（スクロール可能） -->
   <div class="calendar-content" class:dragging-active={draggedItem !== null} bind:this={calendarContentEl}>
@@ -1076,6 +1130,65 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     background-color: #e3f2fd;
     border-color: #2196f3;
     color: #2196f3;
+  }
+
+  /* 設定インラインパネル */
+  .settings-panel {
+    border-bottom: 1px solid #e0e0e0;
+    background: #fafafa;
+  }
+
+  .settings-panel-inner {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 20px;
+    padding: 8px 16px;
+    align-items: flex-end;
+  }
+
+  .setting-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 100px;
+  }
+
+  .setting-item-inline {
+    justify-content: flex-end;
+    padding-bottom: 4px;
+  }
+
+  .setting-item label {
+    font-size: 11px;
+    color: #666;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .setting-item input[type="number"],
+  .setting-item select {
+    font-size: 12px;
+    padding: 3px 6px;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    background: white;
+    width: 80px;
+    box-sizing: border-box;
+  }
+
+  .setting-item input[type="number"]:focus,
+  .setting-item select:focus {
+    outline: none;
+    border-color: #2196f3;
+  }
+
+  .setting-item input[type="checkbox"] {
+    margin-right: 4px;
+  }
+
+  .setting-item .hint {
+    font-size: 10px;
+    color: #999;
   }
 
   .nav-button {
