@@ -974,19 +974,15 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
                 ondragstart={(e) => handleDragStart(e, item, startIndex, week)}
                 ondragend={handleDragEnd}
                 onclick={(e) => { e.stopPropagation(); onItemClick?.(item); }}
-                style="
-                  --lane: {lane};
-                  --start-index: {startIndex};
-                  --span: {span};
-                  background-color: {isDeadlineDay(item) ? `color-mix(in srgb, #ef4444 ${50}%, transparent)` : getItemBgColor(item)};
-                  {isDeadlineDay(item) ? 'color: #7f1d1d; font-weight: 600;' : ''}
-                "
+                style={isDeadlineDay(item)
+                  ? `--lane: ${lane}; --start-index: ${startIndex}; --span: ${span}; --is-deadline: 1; background-color: color-mix(in srgb, #ef4444 50%, transparent); border: 2px solid #ef4444; color: #7f1d1d; font-weight: 600; box-sizing: border-box;`
+                  : `--lane: ${lane}; --start-index: ${startIndex}; --span: ${span}; background-color: ${getItemBgColor(item)};`}
               >
                 {#if isDeadlineDay(item)}
-                  <!-- 日単位 Deadline: ↓アイコン + タイトル（赤背景、リサイズなし） -->
+                  <!-- 日単位 Deadline: ←アイコン + タイトル（赤背景・右半分、リサイズなし） -->
                   <span class="deadline-icon">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M12 5v13M5 12l7 7 7-7"/>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M19 12H6M12 5l-7 7 7 7"/>
                     </svg>
                   </span>
                   <div class="bar-content">{item.title}</div>
@@ -1443,9 +1439,12 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
     opacity: 0.5;
   }
 
-  /* 日単位 Deadline */
+  /* 日単位 Deadline: 右半分・右揃え・枠線 */
   .allday-item.deadline-day {
     font-weight: 600;
+    /* 右半分に表示: span全体の右半分の開始位置から幅は半分 */
+    left: calc(var(--start-index) / var(--cols, 7) * 100% + var(--span) / var(--cols, 7) * 100% / 2 + 4px);
+    width: calc(var(--span) / var(--cols, 7) * 100% / 2 - 8px);
   }
 
   .allday-item.deadline-day .deadline-icon {

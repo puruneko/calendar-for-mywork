@@ -36,6 +36,8 @@ Report READY when governance is loaded.
 ─── request ──────────────────────
 
 - 0006
+	- 日付単位のdeadlineのスタイルは、横幅を半分にして右揃え、透過率50％の塗りつぶしと0%の枠（2px）、矢印は左向きに変更
+		- <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H6M12 5l-7 7 7 7"/></svg>
 	- 日付表示をもっと小さくしてタイトルをより多く表示でいるようにして
 	- マウスオーバーしたらタイトルの全文がわかるようにして
 	- deadlineのDnDが1minorTick分下にドロップされたことになっています。修正して。例えば、1230～12:45のminorTickにドロップしたら、deadlineは12:45にならなければいけないところ、今の実装は12:30になってしまっています

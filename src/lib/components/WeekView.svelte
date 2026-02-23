@@ -1207,7 +1207,9 @@ function getItemClass(item: CalendarItem): string {
                     class:deadline-day={p.item.type === 'deadline'}
                     draggable="true"
                     data-span={p.span}
-                    style="top: {p.top}px; left: {p.left}; width: {p.width}; background-color: {p.item.type === 'deadline' ? `color-mix(in srgb, #ef4444 ${defaultColorOpacity * 100}%, transparent)` : getItemBgColor(p.item)}; {p.item.type === 'deadline' ? 'color: #7f1d1d;' : ''}"
+                    style={p.item.type === 'deadline'
+                      ? `top: ${p.top}px; left: calc(${p.startIndex} / ${weekDays.length} * 100% + calc(${p.span} / ${weekDays.length} * 100% / 2)); width: calc(${p.span} / ${weekDays.length} * 100% / 2 - 4px); background-color: color-mix(in srgb, #ef4444 ${defaultColorOpacity * 100}%, transparent); border: 2px solid #ef4444; color: #7f1d1d; box-sizing: border-box;`
+                      : `top: ${p.top}px; left: ${p.left}; width: ${p.width}; background-color: ${getItemBgColor(p.item)};`}
                     ondragstart={(e) => handleAlldayDragStart(e, p.item, p.startIndex)}
                     ondragend={handleAlldayDragEnd}
                     ondragover={(e) => {
@@ -1242,10 +1244,10 @@ function getItemClass(item: CalendarItem): string {
                     tabindex="0"
                   >
                     {#if p.item.type === 'deadline'}
-                      <!-- 日単位 Deadline: ↓アイコン + タイトル（赤背景） -->
+                      <!-- 日単位 Deadline: ←アイコン + タイトル（赤背景・右半分） -->
                       <span class="deadline-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                          <path d="M12 5v13M5 12l7 7 7-7"/>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M19 12H6M12 5l-7 7 7 7"/>
                         </svg>
                       </span>
                       <div class="allday-bar-content">{p.item.title}</div>
