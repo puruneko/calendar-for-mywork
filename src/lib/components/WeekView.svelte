@@ -726,8 +726,8 @@ let dragPreviewStyle = $derived.by(() => {
   const itemEnd = getItemEnd(draggedItem);
   if (!itemStart || !itemEnd) return null;
   
-  // AllDayアイテムのドラッグは未対応
-  if (!isTimed(draggedItem)) return null;
+  // AllDay / 日単位Deadline のドラッグは別ロジックで処理
+  if (!isTimed(draggedItem) && !isDeadlineTimed(draggedItem)) return null;
   
   // ターゲット日のグリッドを取得
   const dayGrids = document.querySelectorAll('.day-grid');
@@ -742,10 +742,18 @@ let dragPreviewStyle = $derived.by(() => {
   
   if (!targetDayRect) return null;
   
-  // マウスY座標からアイテムの上端位置を計算
-  // ドラッグ開始時のマウスとアイテム上端の差分を考慮
-  const dragOffset = dragStartMouseY - dragStartItemY;
-  const itemTopY = currentDragOverY - dragOffset;
+  // 分単位 Deadline はマウス位置を直接期限時刻として扱う（オフセット不要）
+  // 通常アイテムはドラッグ開始時のマウスとアイテム上端の差分を考慮
+  const isDeadlineItem = isDeadlineTimed(draggedItem);
+  
+  let itemTopY: number;
+  if (isDeadlineItem) {
+    // Deadline: マウス位置をそのまま使用（期限の下辺 = マウス位置）
+    itemTopY = currentDragOverY;
+  } else {
+    const dragOffset = dragStartMouseY - dragStartItemY;
+    itemTopY = currentDragOverY - dragOffset;
+  }
   
   // アイテムの上端位置から時刻を計算
   // minorTick px 分の ▲インジケーター領域が先頭に常時確保されているためオフセットを減算
@@ -754,15 +762,14 @@ let dragPreviewStyle = $derived.by(() => {
   const hoursFromStart = y / hourHeight;
   const minutesFromStart = hoursFromStart * 60;
   
-  
   // 新しい開始位置を計算（minorTick単位にスナップ）
   const rawStart = currentDragOverDay.startOf('day').set({ hour: startHour }).plus({ minutes: minutesFromStart });
   const newStart = snapToMinorTick(rawStart, minorTick);
   const dayStart = newStart.startOf('day').set({ hour: startHour });
   const top = newStart.diff(dayStart, 'minutes').minutes;
   
-  // アイテムの期間を維持
-  const duration = itemEnd.diff(itemStart, 'minutes').minutes;
+  // アイテムの期間を維持（Deadline は minorTick 分固定）
+  const duration = isDeadlineItem ? minorTick : itemEnd.diff(itemStart, 'minutes').minutes;
   const height = duration;
   
   return {
@@ -1330,7 +1337,7 @@ function getItemClass(item: CalendarItem): string {
                     tabindex="0"
                   >
                     <span class="deadline-icon">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M12 5v13M5 12l7 7 7-7"/>
                       </svg>
                     </span>
@@ -1704,10 +1711,11 @@ function getItemClass(item: CalendarItem): string {
   .deadline-content {
     display: flex;
     align-items: center;
-    gap: 3px;
-    padding: 0 4px;
+    gap: 1px;
+    padding: 0 1px 0 0;
     height: 100%;
     overflow: hidden;
+    min-width: 0;
   }
 
   .deadline-icon {
@@ -1715,6 +1723,7 @@ function getItemClass(item: CalendarItem): string {
     align-items: center;
     flex-shrink: 0;
     color: #ef4444;
+    line-height: 1;
   }
 
   .deadline-title {
@@ -1725,12 +1734,17 @@ function getItemClass(item: CalendarItem): string {
     text-overflow: ellipsis;
     white-space: nowrap;
     flex: 1;
+    min-width: 0;
   }
 
   .deadline-time {
     font-size: 10px;
     color: #ef4444;
-    flex-shrink: 0;
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     margin-left: 2px;
   }
 

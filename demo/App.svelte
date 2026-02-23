@@ -9,7 +9,7 @@ import type { CalendarItem } from '../src/lib/models';
 import {
   toISODate, createCalendarDateRange, validateCalendarItems, diffDays,
   createCalendarItem,
-  updateTimedItem, updateAllDayItem,
+  updateTimedItem, updateAllDayItem, updatePointItem,
 } from '../src/lib/models';
 
 // 基準日（今日）
@@ -152,6 +152,14 @@ function handleItemMove(item: CalendarItem, newStart: DateTime, newEnd: DateTime
       const newStartDate = toISODate(newStart.startOf('day'));
       const newEndDate = toISODate(newStart.startOf('day').plus({ days: span }));
       return updateAllDayItem(i, { start: newStartDate, endExclusive: newEndDate });
+    }
+    if (i.temporal.kind === 'CalendarDatePoint') {
+      // 日単位 Deadline: 移動先の日付に更新
+      return updatePointItem(i, toISODate(newStart.startOf('day')));
+    }
+    if (i.temporal.kind === 'CalendarDateTimePoint') {
+      // 分単位 Deadline: 移動先の時刻に更新
+      return updatePointItem(i, newStart);
     }
     // TimedアイテムはDateTimeで更新
     return updateTimedItem(i, newStart, newEnd);
