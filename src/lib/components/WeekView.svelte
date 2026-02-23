@@ -1236,6 +1236,7 @@ function getItemClass(item: CalendarItem): string {
                       const targetDay = weekDays[dayIndex];
                       if (targetDay) handleAlldayDrop(e, targetDay);
                     }}
+                    title={p.item.type === 'deadline' ? p.item.title : undefined}
                     onclick={(e) => { e.stopPropagation(); onItemClick?.(p.item); }}
                     role="button"
                     tabindex="0"
@@ -1334,6 +1335,7 @@ function getItemClass(item: CalendarItem): string {
                   <!-- 分単位 Deadline: ↓アイコン + タイトル（下辺罫線のみ） -->
                   <div
                     class="item-content deadline-content"
+                    title={item.temporal.kind === 'CalendarDateTimePoint' ? `${item.title} (${formatTime(item.temporal.at)})` : item.title}
                     onclick={(e) => { e.stopPropagation(); handleItemClick(item); }}
                     onkeydown={(e) => e.key === 'Enter' && handleItemClick(item)}
                     role="button"

@@ -968,6 +968,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
                 class="allday-item"
                 class:dragging={draggedItem === item}
                 class:deadline-day={isDeadlineDay(item)}
+                title={isDeadlineDay(item) ? item.title : undefined}
                 draggable="true"
                 ondragstart={(e) => handleDragStart(e, item, startIndex, week)}
                 ondragend={handleDragEnd}
