@@ -1,6 +1,6 @@
 id: 0005
 title: 設定UIをインラインパネルに変更（WeekView・MonthView共通）
-status: open
+status: closed
 type: feature
 priority: high
 assignee: unassigned

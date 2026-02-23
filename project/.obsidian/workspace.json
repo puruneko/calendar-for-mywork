@@ -43,16 +43,15 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "__private/workspace/prompt/prompt_weekView.md",
+                "file": "issues/0006-deadline-item.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "prompt_weekView"
+              "title": "0006-deadline-item"
             }
           }
-        ],
-        "currentTab": 2
+        ]
       },
       {
         "id": "cde876e8391367b3",
@@ -64,12 +63,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "__private/workspace/plan/v1.0に向けて/phase1.md",
+                "file": "issues/0008-refactor-weekview-monthview.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "phase1"
+              "title": "0008-refactor-weekview-monthview"
             }
           }
         ]
@@ -234,14 +233,18 @@
       "bases:Create new base": false
     }
   },
-  "active": "b39f45a28c78535a",
+  "active": "fedbe786982108fd",
   "lastOpenFiles": [
-    "__private/workspace/plan/v1.0に向けて/phase1.md",
-    "__private/workspace/prompt/prompt_weekView.md",
-    "__private/workspace/plan/初期要件洗い出し.md",
     "issues/0007-temporal-model-redesign.md",
     "issues/0006-deadline-item.md",
     "issues/0005-settings-inline-panel.md",
+    "issues/0003-clip-items-outside-time-range.md",
+    "issues/0004-weekview-allday-lane.md",
+    "issues/0002-sticky-day-header-in-week-view.md",
+    "__private/workspace/prompt/prompt_weekView.md",
+    "issues/0008-refactor-weekview-monthview.md",
+    "__private/workspace/plan/v1.0に向けて/phase1.md",
+    "__private/workspace/plan/初期要件洗い出し.md",
     "instructions/current_task.md",
     "__private/workspace/prompt/memo.md"
   ]
