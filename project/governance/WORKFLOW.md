@@ -1,133 +1,144 @@
 # WORKFLOW.md
 
-This document defines the ONLY allowed execution flow for development.
-AI agents must follow this sequence strictly.
-No step may be skipped, reordered, or merged.
+## 1. Core Principles
+
+- AI may proceed autonomously until implementation is complete.
+- Development is strictly Issue-driven.
+- A single logical problem must correspond to a single Issue.
+- Issues must evolve; they must not be fragmented.
+- Issue contents must NEVER be printed to the console.
+- An Issue may only be closed after explicit user approval.
+- When an Issue is closed, all related files must be committed.
+- Commit messages must automatically include `related_specs`.
 
 ---
 
-## STEP 1 — IDENTIFY THE ISSUE (ENTRY POINT)
+## 2. Issue Creation Rules
 
-* Locate the target file in `project/issues/`.
-* Confirm:
+### 2.1 Create a New Issue ONLY if:
 
-  * purpose of change
-  * expected outcome
-  * constraints
+- The problem is clearly unrelated to any existing Issue.
+- The change introduces a completely new feature domain.
+- The architectural concern is independent.
 
-If no Issue exists → **STOP immediately.**
-Work without an Issue is prohibited.
-
----
-
-## STEP 2 — LOAD AUTHORITATIVE CONTEXT
-
-Before touching code, you must read:
-
-* `project/specs/*` related to the Issue
-* `project/decisions/*` affecting design or constraints
-* referenced `project/tasks/*` (if present)
-
-You are building an understanding of intent — not code behavior.
+If uncertain:
+→ Prefer updating an existing Issue instead of creating a new one.
 
 ---
 
-## STEP 3 — DEFINE IMPACT BOUNDARY
+### 2.2 Update an Existing Issue if:
 
-You must explicitly determine:
+- It is a continuation of the same bug.
+- It is an improvement of the same feature.
+- It is a redesign of the same logical component.
+- The user modifies direction or requirements of the same task.
+- The implementation approach changes but the problem domain is identical.
 
-* What is allowed to change
-* What must remain unchanged
-* What tests must be updated
-* What side-effects are forbidden
-
-No speculative refactor allowed.
-
----
-
-## STEP 4 — IMPLEMENT MINIMAL CHANGE
-
-Implementation rules:
-
-* Smallest change necessary to satisfy the Issue
-* No optimization unless explicitly required
-* No structural redesign unless defined in specs/decisions
-* Do not “improve” unrelated code
-
-You are executing, not enhancing.
+In these cases:
+→ Do NOT create a new Issue.
+→ Update the existing Issue.
 
 ---
 
-## STEP 5 — ALIGN TESTS WITH SPECIFICATION
+## 3. Issue Update Policy (History Preservation)
 
-Tests must reflect **current specification**, not legacy behavior.
+When updating an Issue:
 
-Before running tests:
-
-* Update or add tests required by the spec change
-* Remove tests that validate obsolete behavior
-* Ensure tests validate outcomes, not implementation details
-
----
-
-## STEP 6 — EXECUTE FULL TEST SUITE
-
-Run ALL tests:
-
-* Functional tests
-* Integration tests (if present)
-* E2E tests
-
-Partial execution is forbidden.
+1. NEVER delete previous content.
+2. NEVER overwrite original reasoning.
+3. Append updates under a `## History` section.
+4. Clearly document:
+   - What changed
+   - Why it changed
+   - How the direction evolved
 
 ---
 
-## STEP 7 — FAILURE LOOP (MANDATORY)
+### Required History Format
 
-If any test fails:
+```
+## History
 
-1. Analyze the failure
-2. Fix implementation (not the test unless spec changed)
-3. Re-run the entire suite
+### YYYY-MM-DD HH:mm
 
-Repeat until **100% pass**.
+- User Instruction:
+  - Concise summary
 
-Skipping failures is a violation of protocol.
+- Change:
+  - Modified design / policy
+  - Added TODO
+  - Removed TODO
 
----
+- Rationale:
+  - Reason for the decision
+```
 
-## STEP 8 — VERIFY SPEC CONSISTENCY
-
-After tests pass, re-check:
-
-* Implementation matches `project/specs`
-* No contradiction with `project/decisions`
-* Behavior matches Issue intent exactly
-
-If mismatch found → return to STEP 4.
+History entries must be appended chronologically.
 
 ---
 
-## STEP 9 — CLOSE THE ISSUE
+## 4. Console Output Restrictions
 
-Only after all prior steps succeed:
-
-* Update Issue status (`open → closed`)
-* Record any necessary notes
-* Ensure repository remains consistent
-
-Completion without Issue update is invalid.
+- Issue files must NEVER be printed to the console.
+- Issue update logs must NEVER be printed.
+- Internal Issue reasoning must remain silent.
+- Issue contents are internal development artifacts only.
 
 ---
 
-## CORE PRINCIPLE
+## 5. Implementation Policy
 
-Workflow is deterministic.
+- AI may implement freely within the active Issue scope.
+- AI must not spawn redundant Issues for the same logical problem.
+- Refactoring within scope does not justify creating a new Issue.
+- All functional and E2E tests must pass before closure.
 
-Issue defines WHY.
-Specs define WHAT.
-Decisions define CONSTRAINTS.
-Workflow defines HOW.
-Tests prove RESULT.
+---
 
-The AI must not invent behavior outside this chain.
+## 6. Issue Closure Rules
+
+An Issue may be marked as `Closed` ONLY when:
+
+- Implementation is complete.
+- All tests pass.
+- The user explicitly approves closure.
+
+If user approval is missing:
+→ The Issue must remain Open.
+
+Automatic closure is strictly prohibited.
+
+---
+
+## 7. Commit Rules
+
+When an Issue is Closed:
+
+- Commit all files related to that Issue.
+- The commit must include:
+  - A clear summary of the change.
+  - The Issue ID reference.
+  - Automatic inclusion of `related_specs`.
+
+Commit structure example:
+
+```
+feat: short description
+
+Issue: #XXX
+related_specs: auto
+```
+
+No commit is allowed before Issue closure.
+
+---
+
+## 8. Behavioral Guardrails
+
+- Do not fragment Issues.
+- Do not silently close Issues.
+- Do not expose internal Issue contents.
+- Prefer evolution over duplication.
+- Maintain architectural consistency at all times.
+
+---
