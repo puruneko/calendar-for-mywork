@@ -177,7 +177,7 @@ let alldayItems = $derived.by((): AllDayItem[] => {
       const s = getItemStart(item)!;
       const e = getItemEnd(item)!;
       let endDateStr: string;
-      if (item.dateRange) {
+      if (isAllDay(item)) {
         endDateStr = formatDate(e);
       } else {
         // timed の複数日アイテム: end は inclusive 時刻なので翌日 startOfDay を exclusive end とする
@@ -187,7 +187,7 @@ let alldayItems = $derived.by((): AllDayItem[] => {
         id: item.id,
         dateRange: {
           start: formatDate(s),
-          end: endDateStr,
+          endExclusive: endDateStr,
         },
       };
     });
@@ -1318,9 +1318,9 @@ function getItemClass(item: CalendarItem): string {
                     <div class="item-parent">{item.parents[index]}</div>
                   {/if}
                   <div class="item-title">{item.title}</div>
-                  {#if item.start && item.end}
+                  {#if item.temporal.kind === 'CalendarDateTimeRange'}
                     <div class="item-time">
-                      {formatTime(item.start)} - {formatTime(item.end)}
+                      {formatTime(item.temporal.start)} - {formatTime(item.temporal.end)}
                     </div>
                   {/if}
                 </div>

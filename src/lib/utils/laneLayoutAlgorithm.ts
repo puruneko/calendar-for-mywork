@@ -23,8 +23,10 @@ export interface WeekContext {
 export interface AllDayItem {
   id: string;
   dateRange: {
-    start: string;     // ISO日付: YYYY-MM-DD (inclusive)
-    end?: string;      // ISO日付: YYYY-MM-DD (exclusive、undefinedの場合は単日)
+    start: string;            // ISO日付: YYYY-MM-DD (inclusive)
+    endExclusive?: string;    // ISO日付: YYYY-MM-DD (exclusive、undefinedの場合は単日)
+    /** @deprecated end を使用してください（endExclusive に移行中） */
+    end?: string;
   };
 }
 
@@ -68,21 +70,23 @@ export interface LaneLayout {
  * @returns レーン配置結果
  */
 export function layoutWeekAllDay(context: WeekContext): LaneLayout {
-  const { weekStart, weekEnd, items } = context;
+  const { weekStart, items } = context;
 
   // Step 1: アイテムを正規化（週内のインデックス空間に変換）
   const normalizedItems: NormalizedItem[] = [];
 
   for (const item of items) {
     const itemStart = item.dateRange.start;
-    const itemEnd = item.dateRange.end || itemStart; // undefinedの場合は同日
+    // endExclusive を優先し、フォールバックとして end（旧フィールド）を使用
+    const itemEndRaw = item.dateRange.endExclusive ?? item.dateRange.end;
+    const itemEnd = itemEndRaw || itemStart; // undefinedの場合は同日
 
     // 週内でのインデックスを計算（クランプ）
     let startIndex = diffDaysISO(weekStart, itemStart);
     let endIndex = diffDaysISO(weekStart, itemEnd);
 
-    // endがundefinedの場合（単日アイテム）、endIndex = startIndex + 1
-    if (!item.dateRange.end) {
+    // endExclusive/end がundefinedの場合（単日アイテム）、endIndex = startIndex + 1
+    if (!itemEndRaw) {
       endIndex = startIndex + 1;
     }
 

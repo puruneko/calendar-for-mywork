@@ -7,7 +7,7 @@ import { DateTime } from 'luxon';
 import { CalendarView } from '../src/lib/components';
 import type { CalendarItem } from '../src/lib/models';
 import {
-  toCalendarDate, createCalendarDateRange, validateCalendarItems, diffDays,
+  toISODate, createCalendarDateRange, validateCalendarItems, diffDays,
   createCalendarItem,
   updateTimedItem, updateAllDayItem,
 } from '../src/lib/models';
@@ -40,16 +40,16 @@ let items = $state<CalendarItem[]>([
   createCalendarItem({ type: 'task', id: 'c6', title: 'カスタム: 透明度指定済み', start: d(2).set({ hour: 11 }), end: d(2).set({ hour: 12 }), status: 'todo', style: { backgroundColor: 'rgba(156,39,176,0.9)', color: '#fff', textDecoration: 'underline' } }),
 
   // ===== 終日アイテム (単日・複数日) =====
-  createCalendarItem({ type: 'task', id: 'a1', title: '終日: プロジェクト計画', dateRange: createCalendarDateRange(toCalendarDate(d(0)), toCalendarDate(d(1))), status: 'doing', parents: ['新規事業プロジェクト'] }),
-  createCalendarItem({ type: 'appointment', id: 'a2', title: '終日: 全社会議', dateRange: createCalendarDateRange(toCalendarDate(d(1)), toCalendarDate(d(2))) }),
-  createCalendarItem({ type: 'task', id: 'a3', title: '終日: 3日間研修', dateRange: createCalendarDateRange(toCalendarDate(d(2)), toCalendarDate(d(5))), status: 'todo', style: { backgroundColor: '#4caf50', color: '#fff' } }),
-  createCalendarItem({ type: 'appointment', id: 'a4', title: '終日: 出張（大阪）', dateRange: createCalendarDateRange(toCalendarDate(d(5)), toCalendarDate(d(8))), parents: ['営業活動'] }),
-  createCalendarItem({ type: 'task', id: 'a5', title: '終日: スプリント計画', dateRange: createCalendarDateRange(toCalendarDate(d(-7)), toCalendarDate(d(-5))), status: 'done', parents: ['開発チーム', 'Sprint#5'] }),
-  createCalendarItem({ type: 'appointment', id: 'a6', title: '終日: 年次総会', dateRange: createCalendarDateRange(toCalendarDate(d(14)), toCalendarDate(d(15))) }),
-  createCalendarItem({ type: 'task', id: 'a7', title: '終日: 月次レビュー', dateRange: createCalendarDateRange(toCalendarDate(d(-3)), toCalendarDate(d(-2))), status: 'done' }),
-  createCalendarItem({ type: 'appointment', id: 'a8', title: '終日: 週またぎイベント', dateRange: createCalendarDateRange(toCalendarDate(d(10)), toCalendarDate(d(17))), style: { backgroundColor: '#9c27b0', color: '#fff' } }),
-  createCalendarItem({ type: 'task', id: 'a9', title: '終日: 月またぎタスク', dateRange: createCalendarDateRange(toCalendarDate(d(25)), toCalendarDate(d(35))), status: 'todo', parents: ['Q2計画'] }),
-  createCalendarItem({ type: 'appointment', id: 'a10', title: '終日: 過去の終日', dateRange: createCalendarDateRange(toCalendarDate(d(-20)), toCalendarDate(d(-18))) }),
+  createCalendarItem({ type: 'task', id: 'a1', title: '終日: プロジェクト計画', dateRange: { start: toISODate(d(0)), endExclusive: toISODate(d(1)) }, status: 'doing', parents: ['新規事業プロジェクト'] }),
+  createCalendarItem({ type: 'appointment', id: 'a2', title: '終日: 全社会議', dateRange: { start: toISODate(d(1)), endExclusive: toISODate(d(2)) } }),
+  createCalendarItem({ type: 'task', id: 'a3', title: '終日: 3日間研修', dateRange: { start: toISODate(d(2)), endExclusive: toISODate(d(5)) }, status: 'todo', style: { backgroundColor: '#4caf50', color: '#fff' } }),
+  createCalendarItem({ type: 'appointment', id: 'a4', title: '終日: 出張（大阪）', dateRange: { start: toISODate(d(5)), endExclusive: toISODate(d(8)) }, parents: ['営業活動'] }),
+  createCalendarItem({ type: 'task', id: 'a5', title: '終日: スプリント計画', dateRange: { start: toISODate(d(-7)), endExclusive: toISODate(d(-5)) }, status: 'done', parents: ['開発チーム', 'Sprint#5'] }),
+  createCalendarItem({ type: 'appointment', id: 'a6', title: '終日: 年次総会', dateRange: { start: toISODate(d(14)), endExclusive: toISODate(d(15)) } }),
+  createCalendarItem({ type: 'task', id: 'a7', title: '終日: 月次レビュー', dateRange: { start: toISODate(d(-3)), endExclusive: toISODate(d(-2)) }, status: 'done' }),
+  createCalendarItem({ type: 'appointment', id: 'a8', title: '終日: 週またぎイベント', dateRange: { start: toISODate(d(10)), endExclusive: toISODate(d(17)) }, style: { backgroundColor: '#9c27b0', color: '#fff' } }),
+  createCalendarItem({ type: 'task', id: 'a9', title: '終日: 月またぎタスク', dateRange: { start: toISODate(d(25)), endExclusive: toISODate(d(35)) }, status: 'todo', parents: ['Q2計画'] }),
+  createCalendarItem({ type: 'appointment', id: 'a10', title: '終日: 過去の終日', dateRange: { start: toISODate(d(-20)), endExclusive: toISODate(d(-18)) } }),
 
   // ===== 時刻付きアイテム（前後1ヶ月を幅広くカバー） =====
   // 過去: -1〜-30日
@@ -93,11 +93,11 @@ let items = $state<CalendarItem[]>([
   createCalendarItem({ type: 'appointment', id: 'ff8', title: '来月の外部監査', start: d(30).set({ hour: 10 }), end: d(30).set({ hour: 17 }) }),
 
   // 複数日またがり (allday)
-  createCalendarItem({ type: 'task', id: 'm1', title: '3日間ワークショップ', dateRange: createCalendarDateRange(toCalendarDate(d(1)), toCalendarDate(d(3))), status: 'doing', parents: ['研修プログラム'] }),
-  createCalendarItem({ type: 'appointment', id: 'm2', title: '出張（大阪）', dateRange: createCalendarDateRange(toCalendarDate(d(5)), toCalendarDate(d(7))), parents: ['営業活動'] }),
-  createCalendarItem({ type: 'task', id: 'm3', title: '週またぎ開発タスク', dateRange: createCalendarDateRange(toCalendarDate(d(-2)), toCalendarDate(d(2))), status: 'doing', parents: ['機能開発Sprint#5'] }),
-  createCalendarItem({ type: 'appointment', id: 'm4', title: '展示会参加', dateRange: createCalendarDateRange(toCalendarDate(d(19)), toCalendarDate(d(21))) }),
-  createCalendarItem({ type: 'task', id: 'm5', title: '月またぎプロジェクト', dateRange: createCalendarDateRange(toCalendarDate(d(28)), toCalendarDate(d(33))), status: 'todo', parents: ['Q2計画', '大型案件'] }),
+  createCalendarItem({ type: 'task', id: 'm1', title: '3日間ワークショップ', dateRange: { start: toISODate(d(1)), endExclusive: toISODate(d(3)) }, status: 'doing', parents: ['研修プログラム'] }),
+  createCalendarItem({ type: 'appointment', id: 'm2', title: '出張（大阪）', dateRange: { start: toISODate(d(5)), endExclusive: toISODate(d(7)) }, parents: ['営業活動'] }),
+  createCalendarItem({ type: 'task', id: 'm3', title: '週またぎ開発タスク', dateRange: { start: toISODate(d(-2)), endExclusive: toISODate(d(2)) }, status: 'doing', parents: ['機能開発Sprint#5'] }),
+  createCalendarItem({ type: 'appointment', id: 'm4', title: '展示会参加', dateRange: { start: toISODate(d(19)), endExclusive: toISODate(d(21)) } }),
+  createCalendarItem({ type: 'task', id: 'm5', title: '月またぎプロジェクト', dateRange: { start: toISODate(d(28)), endExclusive: toISODate(d(33)) }, status: 'todo', parents: ['Q2計画', '大型案件'] }),
 
   // 同一日に多数（+1日: expanded-panel確認用）
   createCalendarItem({ type: 'task', id: 'e1', title: '朝のスタンドアップ', start: d(1).set({ hour: 9 }), end: d(1).set({ hour: 9, minute: 15 }), status: 'done' }),
@@ -140,15 +140,15 @@ function handleItemMove(item: CalendarItem, newStart: DateTime, newEnd: DateTime
   console.debug('Item moved:', item, newStart, newEnd);
   items = items.map(i => {
     if (i.id !== item.id) return i;
-    // AllDayアイテム（dateRange）はCalendarDateで更新し、元の期間を保持する
-    if ('dateRange' in i && i.dateRange) {
-      const span = diffDays(i.dateRange);
-      const newStartDate = toCalendarDate(newStart.startOf('day'));
-      const newEndDate = toCalendarDate(newStart.startOf('day').plus({ days: span }));
-      return { ...i, dateRange: createCalendarDateRange(newStartDate, newEndDate) };
+    if (i.temporal.kind === 'CalendarDateRange') {
+      // AllDayアイテム: 元の期間を保持したまま開始日を移動
+      const span = diffDays(i.temporal);
+      const newStartDate = toISODate(newStart.startOf('day'));
+      const newEndDate = toISODate(newStart.startOf('day').plus({ days: span }));
+      return updateAllDayItem(i, { start: newStartDate, endExclusive: newEndDate });
     }
     // TimedアイテムはDateTimeで更新
-    return { ...i, start: newStart, end: newEnd };
+    return updateTimedItem(i, newStart, newEnd);
   });
 }
 
@@ -156,14 +156,14 @@ function handleItemResize(item: CalendarItem, newStart: DateTime, newEnd: DateTi
   console.debug('Item resized:', item, newStart, newEnd);
   items = items.map(i => {
     if (i.id !== item.id) return i;
-    // AllDayアイテム（dateRange）はCalendarDateで更新
-    if ('dateRange' in i && i.dateRange) {
-      const newStartDate = toCalendarDate(newStart.startOf('day'));
-      const newEndDate = toCalendarDate(newEnd.startOf('day'));
-      return { ...i, dateRange: createCalendarDateRange(newStartDate, newEndDate) };
+    if (i.temporal.kind === 'CalendarDateRange') {
+      // AllDayアイテム: 両端を更新
+      const newStartDate = toISODate(newStart.startOf('day'));
+      const newEndDate = toISODate(newEnd.startOf('day'));
+      return updateAllDayItem(i, { start: newStartDate, endExclusive: newEndDate });
     }
     // TimedアイテムはDateTimeで更新
-    return { ...i, start: newStart, end: newEnd };
+    return updateTimedItem(i, newStart, newEnd);
   });
 }
 

@@ -1,47 +1,66 @@
 /**
  * validateCalendarItem / validateCalendarItems の単体テスト
  * あらゆる不正パターンを網羅的に検証する
+ * 
+ * 新モデル: temporal フィールドに TimeSpan を保持
  */
 
 import { describe, it, expect } from 'vitest';
 import { DateTime } from 'luxon';
 import { validateCalendarItem, validateCalendarItems } from '../../src/lib/models/validation';
-import { toCalendarDate, createCalendarDateRange } from '../../src/lib/models';
+import {
+  toISODate, createCalendarDateRange, createCalendarDateTimeRange,
+  createCalendarDatePoint, createCalendarDateTimePoint,
+} from '../../src/lib/models';
 
 // ===== テスト用ヘルパー =====
 const now = DateTime.now();
 const today = now.startOf('day');
+const todayISO = toISODate(today);
+const tomorrowISO = toISODate(today.plus({ days: 1 }));
 
 const validTimedTask = () => ({
   id: 'task-1',
   type: 'task' as const,
   title: 'テストタスク',
-  start: today.set({ hour: 9 }),
-  end: today.set({ hour: 10 }),
   status: 'todo' as const,
+  temporal: createCalendarDateTimeRange(today.set({ hour: 9 }), today.set({ hour: 10 })),
 });
 
 const validTimedAppointment = () => ({
   id: 'appt-1',
   type: 'appointment' as const,
   title: 'テスト予定',
-  start: today.set({ hour: 14 }),
-  end: today.set({ hour: 15 }),
+  temporal: createCalendarDateTimeRange(today.set({ hour: 14 }), today.set({ hour: 15 })),
 });
 
 const validAllDayTask = () => ({
   id: 'allday-1',
   type: 'task' as const,
   title: '終日タスク',
-  dateRange: createCalendarDateRange(toCalendarDate(today), toCalendarDate(today.plus({ days: 1 }))),
   status: 'doing' as const,
+  temporal: createCalendarDateRange(todayISO, tomorrowISO),
 });
 
 const validAllDayAppointment = () => ({
   id: 'allday-appt-1',
   type: 'appointment' as const,
   title: '終日予定',
-  dateRange: createCalendarDateRange(toCalendarDate(today), toCalendarDate(today.plus({ days: 3 }))),
+  temporal: createCalendarDateRange(todayISO, toISODate(today.plus({ days: 3 }))),
+});
+
+const validDeadlineTimed = () => ({
+  id: 'deadline-1',
+  type: 'deadline' as const,
+  title: '分単位期限',
+  temporal: createCalendarDateTimePoint(today.set({ hour: 15 })),
+});
+
+const validDeadlineDate = () => ({
+  id: 'deadline-2',
+  type: 'deadline' as const,
+  title: '日単位期限',
+  temporal: createCalendarDatePoint(todayISO),
 });
 
 // ===== 正常系テスト =====
@@ -66,6 +85,18 @@ describe('validateCalendarItem - 正常系', () => {
 
   it('有効なAllDayAppointmentはvalidを返す', () => {
     const result = validateCalendarItem(validAllDayAppointment());
+    expect(result.valid).toBe(true);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  it('有効な分単位DeadlineはValidを返す', () => {
+    const result = validateCalendarItem(validDeadlineTimed());
+    expect(result.valid).toBe(true);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  it('有効な日単位DeadlineはValidを返す', () => {
+    const result = validateCalendarItem(validDeadlineDate());
     expect(result.valid).toBe(true);
     expect(result.errors).toHaveLength(0);
   });
@@ -198,150 +229,98 @@ describe('validateCalendarItem - task status', () => {
   });
 });
 
-// ===== TimedItem - start/end チェック =====
-describe('validateCalendarItem - TimedItem start/end', () => {
+// ===== temporal - CalendarDateTimeRange チェック =====
+describe('validateCalendarItem - CalendarDateTimeRange', () => {
   it('startがDateTimeでない場合はinvalid', () => {
-    const result = validateCalendarItem({ ...validTimedTask(), start: '2024-01-01T09:00:00' as any });
+    const result = validateCalendarItem({
+      ...validTimedTask(),
+      temporal: { kind: 'CalendarDateTimeRange', start: '2024-01-01T09:00:00' as any, end: today.set({ hour: 10 }) },
+    });
     expect(result.valid).toBe(false);
-    expect(result.errors.some(e => e.field === 'start')).toBe(true);
+    expect(result.errors.some(e => e.field === 'temporal.start')).toBe(true);
   });
 
   it('endがDateTimeでない場合はinvalid', () => {
-    const result = validateCalendarItem({ ...validTimedTask(), end: new Date() as any });
+    const result = validateCalendarItem({
+      ...validTimedTask(),
+      temporal: { kind: 'CalendarDateTimeRange', start: today.set({ hour: 9 }), end: new Date() as any },
+    });
     expect(result.valid).toBe(false);
-    expect(result.errors.some(e => e.field === 'end')).toBe(true);
-  });
-
-  it('startがinvalid DateTimeの場合はinvalid', () => {
-    const result = validateCalendarItem({ ...validTimedTask(), start: DateTime.fromISO('invalid') });
-    expect(result.valid).toBe(false);
-    expect(result.errors.some(e => e.field === 'start')).toBe(true);
-  });
-
-  it('endがinvalid DateTimeの場合はinvalid', () => {
-    const result = validateCalendarItem({ ...validTimedTask(), end: DateTime.fromISO('invalid') });
-    expect(result.valid).toBe(false);
-    expect(result.errors.some(e => e.field === 'end')).toBe(true);
+    expect(result.errors.some(e => e.field === 'temporal.end')).toBe(true);
   });
 
   it('start >= end はinvalid', () => {
     const result = validateCalendarItem({
       ...validTimedTask(),
-      start: today.set({ hour: 10 }),
-      end: today.set({ hour: 9 }),
+      temporal: { kind: 'CalendarDateTimeRange', start: today.set({ hour: 10 }), end: today.set({ hour: 9 }) },
     });
     expect(result.valid).toBe(false);
-    expect(result.errors.some(e => e.field === 'start/end')).toBe(true);
-  });
-
-  it('start === end はinvalid', () => {
-    const result = validateCalendarItem({
-      ...validTimedTask(),
-      start: today.set({ hour: 9 }),
-      end: today.set({ hour: 9 }),
-    });
-    expect(result.valid).toBe(false);
-    expect(result.errors.some(e => e.field === 'start/end')).toBe(true);
+    expect(result.errors.some(e => e.field === 'temporal')).toBe(true);
   });
 
   it('複数日にまたがる時刻付きアイテムはinvalid', () => {
     const result = validateCalendarItem({
       ...validTimedTask(),
-      start: today.set({ hour: 9 }),
-      end: today.plus({ days: 2 }).set({ hour: 17 }),
+      temporal: { kind: 'CalendarDateTimeRange', start: today.set({ hour: 9 }), end: today.plus({ days: 2 }).set({ hour: 17 }) },
     });
     expect(result.valid).toBe(false);
-    expect(result.errors.some(e => e.field === 'start/end' && e.message.includes('multiple days'))).toBe(true);
-  });
-
-  it('startのみでendがない場合はinvalid', () => {
-    const { end: _e, ...rest } = validTimedTask();
-    const result = validateCalendarItem(rest);
-    expect(result.valid).toBe(false);
-    expect(result.errors.some(e => e.field === 'end')).toBe(true);
-  });
-
-  it('endのみでstartがない場合はinvalid', () => {
-    const { start: _s, ...rest } = validTimedTask();
-    const result = validateCalendarItem(rest);
-    expect(result.valid).toBe(false);
-    expect(result.errors.some(e => e.field === 'start')).toBe(true);
+    expect(result.errors.some(e => e.field === 'temporal' && e.message.includes('multiple days'))).toBe(true);
   });
 });
 
-// ===== AllDayItem - dateRange チェック =====
-describe('validateCalendarItem - AllDayItem dateRange', () => {
-  it('dateRangeのstartが不正形式はinvalid', () => {
+// ===== temporal - CalendarDateRange チェック =====
+describe('validateCalendarItem - CalendarDateRange', () => {
+  it('startが不正形式はinvalid', () => {
     const result = validateCalendarItem({
       ...validAllDayTask(),
-      dateRange: { start: '2024/01/01' as any, end: '2024-01-02' },
+      temporal: { kind: 'CalendarDateRange', start: '2024/01/01' as any, endExclusive: '2024-01-02' },
     });
     expect(result.valid).toBe(false);
-    expect(result.errors.some(e => e.field === 'dateRange.start')).toBe(true);
+    expect(result.errors.some(e => e.field === 'temporal.start')).toBe(true);
   });
 
-  it('dateRangeのendが不正形式はinvalid', () => {
+  it('endExclusiveが不正形式はinvalid', () => {
     const result = validateCalendarItem({
       ...validAllDayTask(),
-      dateRange: { start: '2024-01-01', end: '20240102' as any },
+      temporal: { kind: 'CalendarDateRange', start: '2024-01-01', endExclusive: '20240102' as any },
     });
     expect(result.valid).toBe(false);
-    expect(result.errors.some(e => e.field === 'dateRange.end')).toBe(true);
+    expect(result.errors.some(e => e.field === 'temporal.endExclusive')).toBe(true);
   });
 
-  it('dateRange.end <= dateRange.start はinvalid', () => {
+  it('endExclusive <= start はinvalid', () => {
     const result = validateCalendarItem({
       ...validAllDayTask(),
-      dateRange: { start: '2024-01-05', end: '2024-01-03' },
+      temporal: { kind: 'CalendarDateRange', start: '2024-01-05', endExclusive: '2024-01-03' },
     });
     expect(result.valid).toBe(false);
-    expect(result.errors.some(e => e.field === 'dateRange')).toBe(true);
-  });
-
-  it('dateRange.start === dateRange.end はinvalid（end is exclusive）', () => {
-    const result = validateCalendarItem({
-      ...validAllDayTask(),
-      dateRange: { start: '2024-01-01', end: '2024-01-01' },
-    });
-    expect(result.valid).toBe(false);
-    expect(result.errors.some(e => e.field === 'dateRange')).toBe(true);
-  });
-
-  it('dateRangeがオブジェクトでない場合はinvalid', () => {
-    const result = validateCalendarItem({
-      ...validAllDayTask(),
-      dateRange: 'invalid' as any,
-    });
-    expect(result.valid).toBe(false);
-    expect(result.errors.some(e => e.field === 'dateRange')).toBe(true);
+    expect(result.errors.some(e => e.field === 'temporal')).toBe(true);
   });
 });
 
-// ===== 排他性チェック =====
-describe('validateCalendarItem - 排他性', () => {
-  it('start/endとdateRangeの両方を持つ場合はinvalid', () => {
+// ===== temporal なし =====
+describe('validateCalendarItem - temporal なし', () => {
+  it('temporalが未定義の場合はinvalid', () => {
     const result = validateCalendarItem({
-      id: 'mixed-1',
+      id: 'no-temporal',
       type: 'task',
-      title: '混在アイテム',
-      start: today.set({ hour: 9 }),
-      end: today.set({ hour: 10 }),
-      dateRange: createCalendarDateRange(toCalendarDate(today), toCalendarDate(today.plus({ days: 1 }))),
+      title: '時間なし',
       status: 'todo',
     });
     expect(result.valid).toBe(false);
-    expect(result.errors.some(e => e.field.includes('dateRange'))).toBe(true);
+    expect(result.errors.some(e => e.field === 'temporal')).toBe(true);
   });
 
-  it('start/endもdateRangeも持たない場合はinvalid', () => {
+  it('temporal.kindが不正値の場合はinvalid', () => {
     const result = validateCalendarItem({
-      id: 'no-date-1',
+      id: 'bad-kind',
       type: 'task',
-      title: '日時なしアイテム',
+      title: '不正kind',
       status: 'todo',
+      temporal: { kind: 'Unknown' },
     });
     expect(result.valid).toBe(false);
-    expect(result.errors.some(e => e.field === 'start/dateRange')).toBe(true);
+    expect(result.errors.some(e => e.field === 'temporal.kind')).toBe(true);
   });
 });
 
@@ -369,14 +348,17 @@ describe('validateCalendarItem - parents/tags', () => {
 // ===== validateCalendarItems（複数アイテム）=====
 describe('validateCalendarItems', () => {
   it('全て有効なアイテムは0を返す', () => {
-    const count = validateCalendarItems([validTimedTask(), validAllDayTask(), validTimedAppointment()]);
+    const count = validateCalendarItems([validTimedTask(), validAllDayTask(), validTimedAppointment(), validDeadlineTimed()]);
     expect(count).toBe(0);
   });
 
   it('1件エラーがある場合は1を返す', () => {
     const count = validateCalendarItems([
       validTimedTask(),
-      { ...validTimedTask(), id: 'task-2', start: today.set({ hour: 10 }), end: today.set({ hour: 9 }) }, // start > end
+      {
+        id: 'task-2', type: 'task', title: 'エラー', status: 'todo',
+        temporal: { kind: 'CalendarDateTimeRange', start: today.set({ hour: 10 }), end: today.set({ hour: 9 }) },
+      },
     ]);
     expect(count).toBeGreaterThan(0);
   });

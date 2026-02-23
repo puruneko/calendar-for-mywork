@@ -3,7 +3,7 @@
  * 
  * 特徴:
  * - 完了・進捗の概念を持つ
- * - Timed（時刻指定）と AllDay（終日）の両方をサポート
+ * - temporal フィールドに TimeSpan を保持（TimedまたはAllDay）
  * - 階層構造をサポート（parentId）
  */
 

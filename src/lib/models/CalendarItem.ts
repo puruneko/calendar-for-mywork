@@ -1,48 +1,24 @@
 /**
  * カレンダーアイテムの基底インターフェース
- * TaskとAppointmentの共通属性を定義
  * 
- * TimedItem と AllDayItem は排他的な Union 型として実装
+ * 設計方針:
+ * - Item と 時間情報（TimeSpan）は完全に分離する
+ * - temporal フィールドに TimeSpan を保持し、start/end/dateRange は持たない
+ * - これにより RRULE・Occurrence・Floating Time 等の将来拡張に対応できる
  */
 
-import type { DateTime } from 'luxon';
-import type { CalendarDateRange } from './calendarDateRange';
-
-/**
- * 時刻を持つイベント（Timed Event）
- */
-type TimedItem = {
-  /** 開始日時（Luxon DateTime） */
-  start: DateTime;
-  /** 終了日時（Luxon DateTime） */
-  end: DateTime;
-  /** AllDay用の日付レンジ（Timedでは使用不可） */
-  dateRange?: never;
-};
-
-/**
- * 終日イベント（AllDay Event）
- * 時刻を持たず、暦日レンジのみを扱う
- */
-type AllDayItem = {
-  /** AllDay用の日付レンジ（end は exclusive） */
-  dateRange: CalendarDateRange;
-  /** 開始日時（AllDayでは使用不可） */
-  start?: never;
-  /** 終了日時（AllDayでは使用不可） */
-  end?: never;
-};
+import type { TimeSpan } from './temporal';
 
 /**
  * カレンダーアイテム
- * TimedItem または AllDayItem のいずれかを持つ
+ * 時間情報は temporal フィールドに TimeSpan として保持する
  */
 export type CalendarItem = {
   /** 一意識別子 */
   id: string;
   
   /** アイテムタイプ */
-  type: 'task' | 'appointment';
+  type: 'task' | 'appointment' | 'deadline';
   
   /** 表示タイトル */
   title: string;
@@ -58,4 +34,7 @@ export type CalendarItem = {
   
   /** 親階層の配列（0番目がTop parent、最後が直近のparent） */
   parents?: string[];
-} & (TimedItem | AllDayItem);
+  
+  /** 時間占有情報 */
+  temporal: TimeSpan;
+};

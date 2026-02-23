@@ -1,14 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import { DateTime } from 'luxon';
-import { createCalendarItem, updateTimedItem, updateAllDayItem } from '../../src/lib/models/factories';
-import { createCalendarDateRange, toCalendarDate } from '../../src/lib/models';
+import { createCalendarItem, updateTimedItem, updateAllDayItem, updatePointItem } from '../../src/lib/models/factories';
+import {
+  toISODate, createCalendarDateRange, createCalendarDateTimeRange,
+  createCalendarDatePoint, createCalendarDateTimePoint,
+} from '../../src/lib/models';
 
 const now = DateTime.now();
 const start = now.set({ hour: 9, minute: 0, second: 0, millisecond: 0 });
 const end = now.set({ hour: 10, minute: 0, second: 0, millisecond: 0 });
-const today = toCalendarDate(now);
-const tomorrow = toCalendarDate(now.plus({ days: 1 }));
-const dateRange = createCalendarDateRange(today, tomorrow);
+const today = toISODate(now);
+const tomorrow = toISODate(now.plus({ days: 1 }));
+const dateRangeObj = { start: today, endExclusive: tomorrow };
 
 describe('createCalendarItem', () => {
   describe('不正なtype', () => {
@@ -43,8 +46,7 @@ describe('createCalendarItem', () => {
       expect(item.type).toBe('task');
       expect(item.id).toBe('1');
       expect(item.title).toBe('テスト');
-      expect('start' in item).toBe(true);
-      expect('dateRange' in item && item.dateRange).toBeFalsy();
+      expect(item.temporal.kind).toBe('CalendarDateTimeRange');
     });
 
     it('statusがdoing/doneでも生成できること', () => {
@@ -54,13 +56,13 @@ describe('createCalendarItem', () => {
 
     it('parentsを含めて生成できること', () => {
       const item = createCalendarItem({ type: 'task', id: '4', title: 'p', status: 'todo', start, end, parents: ['A', 'B'] });
-      expect('parents' in item && item.parents).toEqual(['A', 'B']);
+      expect(item.parents).toEqual(['A', 'B']);
     });
 
     it('styleを含めて生成できること', () => {
       const style = { backgroundColor: '#ff0000' } as Partial<CSSStyleDeclaration>;
       const item = createCalendarItem({ type: 'task', id: '5', title: 's', status: 'todo', start, end, style });
-      expect('style' in item && item.style).toEqual(style);
+      expect(item.style).toEqual(style);
     });
 
     it('start >= end の場合Errorをスローすること', () => {
@@ -78,14 +80,12 @@ describe('createCalendarItem', () => {
 
   describe('AllDayTask', () => {
     it('正常なAllDayTaskを生成できること', () => {
-      const item = createCalendarItem({ type: 'task', id: 'a1', title: '終日', status: 'todo', dateRange });
+      const item = createCalendarItem({ type: 'task', id: 'a1', title: '終日', status: 'todo', dateRange: dateRangeObj });
       expect(item.type).toBe('task');
-      expect('dateRange' in item && item.dateRange).toBeTruthy();
-      expect('start' in item && item.start).toBeFalsy();
+      expect(item.temporal.kind).toBe('CalendarDateRange');
     });
 
-    it('dateRange.start >= dateRange.end の場合createCalendarDateRange自体がErrorをスローすること', () => {
-      // createCalendarDateRange が end <= start の場合にエラーをスローする
+    it('dateRange.endExclusive <= dateRange.start の場合createCalendarDateRangeがErrorをスローすること', () => {
       expect(() => createCalendarDateRange(tomorrow, today)).toThrow('Invalid CalendarDateRange');
     });
   });
@@ -94,7 +94,7 @@ describe('createCalendarItem', () => {
     it('正常なTimedAppointmentを生成できること', () => {
       const item = createCalendarItem({ type: 'appointment', id: 'b1', title: '予定', start, end });
       expect(item.type).toBe('appointment');
-      expect('start' in item).toBe(true);
+      expect(item.temporal.kind).toBe('CalendarDateTimeRange');
       expect('status' in item).toBe(false);
     });
 
@@ -105,25 +105,76 @@ describe('createCalendarItem', () => {
 
   describe('AllDayAppointment', () => {
     it('正常なAllDayAppointmentを生成できること', () => {
-      const item = createCalendarItem({ type: 'appointment', id: 'b3', title: '終日予定', dateRange });
+      const item = createCalendarItem({ type: 'appointment', id: 'b3', title: '終日予定', dateRange: dateRangeObj });
       expect(item.type).toBe('appointment');
-      expect('dateRange' in item && item.dateRange).toBeTruthy();
+      expect(item.temporal.kind).toBe('CalendarDateRange');
+    });
+  });
+
+  describe('Deadline', () => {
+    it('CalendarDateTimePoint Deadlineを生成できること', () => {
+      const at = now.set({ hour: 15, minute: 0, second: 0, millisecond: 0 });
+      const item = createCalendarItem({
+        type: 'deadline',
+        id: 'd1',
+        title: '分単位期限',
+        temporal: createCalendarDateTimePoint(at),
+      });
+      expect(item.type).toBe('deadline');
+      expect(item.temporal.kind).toBe('CalendarDateTimePoint');
+    });
+
+    it('CalendarDatePoint Deadlineを生成できること', () => {
+      const item = createCalendarItem({
+        type: 'deadline',
+        id: 'd2',
+        title: '日単位期限',
+        temporal: createCalendarDatePoint(today),
+      });
+      expect(item.type).toBe('deadline');
+      expect(item.temporal.kind).toBe('CalendarDatePoint');
+    });
+  });
+
+  describe('temporal 直接指定', () => {
+    it('CalendarDateTimeRange を temporal で直接指定できること', () => {
+      const item = createCalendarItem({
+        type: 'task',
+        id: 't1',
+        title: '直接指定',
+        status: 'todo',
+        temporal: createCalendarDateTimeRange(start, end),
+      });
+      expect(item.temporal.kind).toBe('CalendarDateTimeRange');
+    });
+
+    it('CalendarDateRange を temporal で直接指定できること', () => {
+      const item = createCalendarItem({
+        type: 'appointment',
+        id: 't2',
+        title: '直接指定allday',
+        temporal: createCalendarDateRange(today, tomorrow),
+      });
+      expect(item.temporal.kind).toBe('CalendarDateRange');
     });
   });
 });
 
 describe('updateTimedItem', () => {
-  it('TimedItemのstart/endを更新できること', () => {
+  it('CalendarDateTimeRange のstart/endを更新できること', () => {
     const item = createCalendarItem({ type: 'task', id: 'u1', title: '更新', status: 'todo', start, end });
     const newStart = start.plus({ hours: 1 });
     const newEnd = end.plus({ hours: 1 });
     const updated = updateTimedItem(item, newStart, newEnd);
-    expect('start' in updated && updated.start?.equals(newStart)).toBe(true);
-    expect('end' in updated && updated.end?.equals(newEnd)).toBe(true);
+    expect(updated.temporal.kind).toBe('CalendarDateTimeRange');
+    if (updated.temporal.kind === 'CalendarDateTimeRange') {
+      expect(updated.temporal.start.equals(newStart)).toBe(true);
+      expect(updated.temporal.end.equals(newEnd)).toBe(true);
+    }
   });
 
-  it('AllDayItemに呼んだ場合Errorをスローすること', () => {
-    const item = createCalendarItem({ type: 'task', id: 'u2', title: '終日', status: 'todo', dateRange });
+  it('CalendarDateRange アイテムに呼んだ場合Errorをスローすること', () => {
+    const item = createCalendarItem({ type: 'task', id: 'u2', title: '終日', status: 'todo', dateRange: dateRangeObj });
     expect(() => updateTimedItem(item, start, end)).toThrow();
   });
 
@@ -134,21 +185,50 @@ describe('updateTimedItem', () => {
 });
 
 describe('updateAllDayItem', () => {
-  it('AllDayItemのdateRangeを更新できること', () => {
-    const item = createCalendarItem({ type: 'appointment', id: 'v1', title: '終日予定', dateRange });
-    const newRange = createCalendarDateRange(tomorrow, toCalendarDate(now.plus({ days: 3 })));
-    const updated = updateAllDayItem(item, newRange);
-    expect('dateRange' in updated && updated.dateRange).toEqual(newRange);
+  it('CalendarDateRange のdateRangeを更新できること', () => {
+    const item = createCalendarItem({ type: 'appointment', id: 'v1', title: '終日予定', dateRange: dateRangeObj });
+    const newEndExclusive = toISODate(now.plus({ days: 3 }));
+    const updated = updateAllDayItem(item, { start: tomorrow, endExclusive: newEndExclusive });
+    expect(updated.temporal.kind).toBe('CalendarDateRange');
+    if (updated.temporal.kind === 'CalendarDateRange') {
+      expect(updated.temporal.start).toBe(tomorrow);
+      expect(updated.temporal.endExclusive).toBe(newEndExclusive);
+    }
   });
 
-  it('TimedItemに呼んだ場合Errorをスローすること', () => {
+  it('CalendarDateTimeRange アイテムに呼んだ場合Errorをスローすること', () => {
     const item = createCalendarItem({ type: 'appointment', id: 'v2', title: '予定', start, end });
-    expect(() => updateAllDayItem(item, dateRange)).toThrow();
+    expect(() => updateAllDayItem(item, dateRangeObj)).toThrow();
   });
 
   it('不正なdateRange(逆順)はcreateCalendarDateRange自体がErrorをスローすること', () => {
-    // end <= start の場合は createCalendarDateRange がエラーをスローするため、
-    // updateAllDayItem に渡す前に検出される
     expect(() => createCalendarDateRange(tomorrow, today)).toThrow('Invalid CalendarDateRange');
+  });
+});
+
+describe('updatePointItem', () => {
+  it('CalendarDateTimePoint を更新できること', () => {
+    const at = now.set({ hour: 15, minute: 0, second: 0, millisecond: 0 });
+    const item = createCalendarItem({ type: 'deadline', id: 'w1', title: '期限', temporal: createCalendarDateTimePoint(at) });
+    const newAt = at.plus({ hours: 1 });
+    const updated = updatePointItem(item, newAt);
+    expect(updated.temporal.kind).toBe('CalendarDateTimePoint');
+    if (updated.temporal.kind === 'CalendarDateTimePoint') {
+      expect(updated.temporal.at.equals(newAt)).toBe(true);
+    }
+  });
+
+  it('CalendarDatePoint を更新できること', () => {
+    const item = createCalendarItem({ type: 'deadline', id: 'w2', title: '日期限', temporal: createCalendarDatePoint(today) });
+    const updated = updatePointItem(item, tomorrow);
+    expect(updated.temporal.kind).toBe('CalendarDatePoint');
+    if (updated.temporal.kind === 'CalendarDatePoint') {
+      expect(updated.temporal.at).toBe(tomorrow);
+    }
+  });
+
+  it('CalendarDateTimeRange アイテムに呼んだ場合Errorをスローすること', () => {
+    const item = createCalendarItem({ type: 'task', id: 'w3', title: 'timed', status: 'todo', start, end });
+    expect(() => updatePointItem(item, now)).toThrow();
   });
 });

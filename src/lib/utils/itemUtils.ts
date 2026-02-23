@@ -1,76 +1,80 @@
 /**
  * CalendarItem用のユーティリティ関数
- * Timed と AllDay の両方を安全に扱う
+ * temporal フィールド（TimeSpan）を通じてアイテムの時間情報にアクセスする
  */
 
 import { DateTime } from 'luxon';
 import type { CalendarItem } from '../models/CalendarItem';
-import { toStartDateTime, toEndDateTime } from '../models/calendarDateRangeOps';
+import { getSpanStart, getSpanEnd } from '../models/temporal';
 
 /**
- * アイテムがTimedかどうかを判定
+ * アイテムが CalendarDateTimeRange（時刻付き期間）かどうかを判定
  */
-export function isTimed(item: CalendarItem): item is CalendarItem & { start: DateTime; end: DateTime } {
-  return item.start !== undefined && item.end !== undefined;
+export function isTimed(item: CalendarItem): boolean {
+  return item.temporal.kind === 'CalendarDateTimeRange';
 }
 
 /**
- * アイテムがAllDayかどうかを判定
+ * アイテムが CalendarDateRange（終日期間）かどうかを判定
  */
 export function isAllDay(item: CalendarItem): boolean {
-  return item.dateRange !== undefined;
+  return item.temporal.kind === 'CalendarDateRange';
 }
 
 /**
- * アイテムの開始日時を取得（AllDayの場合は00:00として返す）
- * @param item - カレンダーアイテム
- * @param zone - タイムゾーン（AllDayの場合のみ使用）
+ * アイテムが Point（期限）かどうかを判定
  */
-export function getItemStart(item: CalendarItem, zone: string = 'local'): DateTime | null {
-  if (isTimed(item)) {
-    return item.start;
-  } else if (item.dateRange) {
-    return toStartDateTime(item.dateRange, zone);
-  }
-  return null;
+export function isDeadlinePoint(item: CalendarItem): boolean {
+  return item.temporal.kind === 'CalendarDateTimePoint' || item.temporal.kind === 'CalendarDatePoint';
 }
 
 /**
- * アイテムの終了日時を取得（AllDayの場合は00:00として返す）
+ * アイテムの開始日時を取得（レイアウト用）
+ * - CalendarDateTimeRange: start をそのまま返す
+ * - CalendarDateRange: start の 00:00 を返す
+ * - CalendarDateTimePoint: at - minorTick分 を返す
+ * - CalendarDatePoint: at の 00:00 を返す
+ * 
  * @param item - カレンダーアイテム
- * @param zone - タイムゾーン（AllDayの場合のみ使用）
+ * @param zone - タイムゾーン（Date-only の場合のみ使用）
+ * @param minorTick - Point の場合の幅（分）
  */
-export function getItemEnd(item: CalendarItem, zone: string = 'local'): DateTime | null {
-  if (isTimed(item)) {
-    return item.end;
-  } else if (item.dateRange) {
-    return toEndDateTime(item.dateRange, zone);
-  }
-  return null;
+export function getItemStart(item: CalendarItem, zone: string = 'local'): DateTime {
+  return getSpanStart(item.temporal, zone);
 }
+
+/**
+ * アイテムの終了日時を取得（レイアウト用）
+ * - CalendarDateTimeRange: end をそのまま返す
+ * - CalendarDateRange: endExclusive の 00:00 を返す
+ * - CalendarDateTimePoint: at を返す（終端 = 期限時刻）
+ * - CalendarDatePoint: at の翌日 00:00 を返す
+ * 
+ * @param item - カレンダーアイテム
+ * @param zone - タイムゾーン（Date-only の場合のみ使用）
+ * @param minorTick - Point の場合の幅（分）
+ */
+export function getItemEnd(item: CalendarItem, zone: string = 'local', minorTick: number = 15): DateTime {
+  return getSpanEnd(item.temporal, zone, minorTick);
+}
+
 
 /**
  * アイテムが指定された日を含むかどうか判定
  */
-export function itemContainsDay(item: CalendarItem, day: DateTime): boolean {
-  const start = getItemStart(item);
-  const end = getItemEnd(item);
-  
-  if (!start || !end) return false;
-  
+export function itemContainsDay(item: CalendarItem, day: DateTime, zone: string = 'local'): boolean {
+  const start = getItemStart(item, zone);
+  const end = getItemEnd(item, zone);
   return start < day.endOf('day') && end > day.startOf('day');
 }
 
 /**
  * 2つのアイテムが重なるかどうか判定
  */
-export function itemsOverlap(item1: CalendarItem, item2: CalendarItem): boolean {
-  const start1 = getItemStart(item1);
-  const end1 = getItemEnd(item1);
-  const start2 = getItemStart(item2);
-  const end2 = getItemEnd(item2);
-  
-  if (!start1 || !end1 || !start2 || !end2) return false;
-  
+export function itemsOverlap(item1: CalendarItem, item2: CalendarItem, zone: string = 'local'): boolean {
+  const start1 = getItemStart(item1, zone);
+  const end1 = getItemEnd(item1, zone);
+  const start2 = getItemStart(item2, zone);
+  const end2 = getItemEnd(item2, zone);
   return start1 < end2 && start2 < end1;
 }

@@ -730,8 +730,8 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
       if (!start || !end) return null;
 
       let endDateStr: string;
-      if (item.dateRange) {
-        // AllDay item: dateRange.end は既にexclusive
+      if (item.temporal.kind === 'CalendarDateRange') {
+        // AllDay item: endExclusive は既にexclusive
         endDateStr = formatDate(end);
       } else {
         // Timed item: end は "2/23 17:00" のような時刻付き → 翌日のstartOfDayをexclusiveとする
@@ -744,7 +744,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
         id: item.id,
         dateRange: {
           start: formatDate(start),
-          end: endDateStr,
+          endExclusive: endDateStr,
         },
       };
     })

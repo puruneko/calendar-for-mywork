@@ -1,10 +1,11 @@
 /**
  * CalendarItem のバリデーション関数
  * データの不正を早期に検出してコンソールエラーを出力する
+ * 
+ * 新モデル: temporal フィールドに TimeSpan を保持
  */
 
 import { DateTime } from 'luxon';
-import type { CalendarItem } from './CalendarItem';
 
 export type ValidationError = {
   field: string;
@@ -15,6 +16,76 @@ export type ValidationResult = {
   valid: boolean;
   errors: ValidationError[];
 };
+
+/**
+ * TimeSpan をバリデーション
+ */
+function validateTimeSpan(span: unknown, errors: ValidationError[]): void {
+  if (span === null || span === undefined || typeof span !== 'object') {
+    errors.push({ field: 'temporal', message: 'temporal must be a TimeSpan object' });
+    return;
+  }
+
+  const s = span as Record<string, unknown>;
+  const kind = s.kind;
+
+  const validKinds = ['CalendarDateRange', 'CalendarDateTimeRange', 'CalendarDatePoint', 'CalendarDateTimePoint'];
+  if (!validKinds.includes(kind as string)) {
+    errors.push({ field: 'temporal.kind', message: `temporal.kind must be one of ${validKinds.join('|')}, got: ${String(kind)}` });
+    return;
+  }
+
+  switch (kind) {
+    case 'CalendarDateRange': {
+      const start = s.start;
+      const endExclusive = s.endExclusive;
+      if (typeof start !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(start)) {
+        errors.push({ field: 'temporal.start', message: `CalendarDateRange.start must be YYYY-MM-DD, got: ${String(start)}` });
+      }
+      if (typeof endExclusive !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(endExclusive)) {
+        errors.push({ field: 'temporal.endExclusive', message: `CalendarDateRange.endExclusive must be YYYY-MM-DD, got: ${String(endExclusive)}` });
+      }
+      if (typeof start === 'string' && typeof endExclusive === 'string' && endExclusive <= start) {
+        errors.push({ field: 'temporal', message: `CalendarDateRange.endExclusive must be after start: ${start} >= ${endExclusive}` });
+      }
+      break;
+    }
+    case 'CalendarDateTimeRange': {
+      const start = s.start;
+      const end = s.end;
+      if (!(start instanceof DateTime) || !start.isValid) {
+        errors.push({ field: 'temporal.start', message: `CalendarDateTimeRange.start must be a valid Luxon DateTime` });
+      }
+      if (!(end instanceof DateTime) || !end.isValid) {
+        errors.push({ field: 'temporal.end', message: `CalendarDateTimeRange.end must be a valid Luxon DateTime` });
+      }
+      if (start instanceof DateTime && end instanceof DateTime && start.isValid && end.isValid) {
+        if (start >= end) {
+          errors.push({ field: 'temporal', message: `CalendarDateTimeRange.start must be before end: ${start.toISO()} >= ${end.toISO()}` });
+        }
+        // 複数日にまたがる時刻付きアイテムは警告
+        if (!start.hasSame(end.minus({ milliseconds: 1 }), 'day')) {
+          errors.push({ field: 'temporal', message: `CalendarDateTimeRange spans multiple days: ${start.toISODate()} -> ${end.toISODate()} (consider using CalendarDateRange instead)` });
+        }
+      }
+      break;
+    }
+    case 'CalendarDatePoint': {
+      const at = s.at;
+      if (typeof at !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(at)) {
+        errors.push({ field: 'temporal.at', message: `CalendarDatePoint.at must be YYYY-MM-DD, got: ${String(at)}` });
+      }
+      break;
+    }
+    case 'CalendarDateTimePoint': {
+      const at = s.at;
+      if (!(at instanceof DateTime) || !at.isValid) {
+        errors.push({ field: 'temporal.at', message: `CalendarDateTimePoint.at must be a valid Luxon DateTime` });
+      }
+      break;
+    }
+  }
+}
 
 /**
  * 単一の CalendarItem をバリデーション
@@ -45,8 +116,9 @@ export function validateCalendarItem(item: unknown): ValidationResult {
   }
 
   // --- type チェック ---
-  if (i.type !== 'task' && i.type !== 'appointment') {
-    errors.push({ field: 'type', message: `type must be 'task' or 'appointment', got: ${String(i.type)}` });
+  const validTypes = ['task', 'appointment', 'deadline'];
+  if (!validTypes.includes(i.type as string)) {
+    errors.push({ field: 'type', message: `type must be one of ${validTypes.join('|')}, got: ${String(i.type)}` });
   }
 
   // --- Task 固有チェック ---
@@ -57,94 +129,11 @@ export function validateCalendarItem(item: unknown): ValidationResult {
     }
   }
 
-  // --- 排他性チェック: start/end と dateRange は共存不可 ---
-  const hasStart = i.start !== undefined && i.start !== null;
-  const hasEnd = i.end !== undefined && i.end !== null;
-  const hasDateRange = i.dateRange !== undefined && i.dateRange !== null;
-
-  if (hasStart && hasDateRange) {
-    errors.push({ field: 'start/dateRange', message: 'item cannot have both start and dateRange (use one or the other)' });
-  }
-  if (hasEnd && hasDateRange) {
-    errors.push({ field: 'end/dateRange', message: 'item cannot have both end and dateRange (use one or the other)' });
-  }
-
-  // --- どちらも持っていない ---
-  if (!hasStart && !hasDateRange) {
-    errors.push({ field: 'start/dateRange', message: 'item must have either start/end (TimedItem) or dateRange (AllDayItem)' });
-  }
-
-  // --- TimedItem チェック ---
-  if (hasStart || hasEnd) {
-    // start が DateTime であること
-    if (!hasStart) {
-      errors.push({ field: 'start', message: 'start is missing (end is present)' });
-    } else if (!(i.start instanceof DateTime)) {
-      errors.push({ field: 'start', message: `start must be a Luxon DateTime, got: ${typeof i.start}` });
-    } else {
-      const start = i.start as DateTime;
-      if (!start.isValid) {
-        errors.push({ field: 'start', message: `start is invalid DateTime: ${start.invalidReason} (${start.invalidExplanation})` });
-      }
-    }
-
-    // end が DateTime であること
-    if (!hasEnd) {
-      errors.push({ field: 'end', message: 'end is missing (start is present)' });
-    } else if (!(i.end instanceof DateTime)) {
-      errors.push({ field: 'end', message: `end must be a Luxon DateTime, got: ${typeof i.end}` });
-    } else {
-      const end = i.end as DateTime;
-      if (!end.isValid) {
-        errors.push({ field: 'end', message: `end is invalid DateTime: ${end.invalidReason} (${end.invalidExplanation})` });
-      }
-    }
-
-    // start < end チェック
-    if (i.start instanceof DateTime && i.end instanceof DateTime &&
-        (i.start as DateTime).isValid && (i.end as DateTime).isValid) {
-      const start = i.start as DateTime;
-      const end = i.end as DateTime;
-      if (start >= end) {
-        errors.push({ field: 'start/end', message: `start must be before end: ${start.toISO()} >= ${end.toISO()}` });
-      }
-      // 複数日にまたがる時刻付きアイテムは警告（WeekViewで表示崩れの原因）
-      if (!start.hasSame(end.minus({ milliseconds: 1 }), 'day')) {
-        errors.push({ field: 'start/end', message: `timed item spans multiple days: ${start.toISODate()} -> ${end.toISODate()} (use dateRange instead)` });
-      }
-    }
-  }
-
-  // --- AllDayItem チェック ---
-  if (hasDateRange) {
-    const dr = i.dateRange as Record<string, unknown>;
-    if (typeof dr !== 'object' || dr === null) {
-      errors.push({ field: 'dateRange', message: 'dateRange must be an object with start and end' });
-    } else {
-      const drStart = dr.start;
-      const drEnd = dr.end;
-
-      // start が YYYY-MM-DD 形式であること
-      if (typeof drStart !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(drStart)) {
-        errors.push({ field: 'dateRange.start', message: `dateRange.start must be YYYY-MM-DD, got: ${String(drStart)}` });
-      }
-
-      // end が YYYY-MM-DD 形式であること
-      if (typeof drEnd !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(drEnd)) {
-        errors.push({ field: 'dateRange.end', message: `dateRange.end must be YYYY-MM-DD, got: ${String(drEnd)}` });
-      }
-
-      // start < end チェック（end は exclusive）
-      if (typeof drStart === 'string' && typeof drEnd === 'string') {
-        if (drEnd <= drStart) {
-          errors.push({ field: 'dateRange', message: `dateRange.end must be after start (end is exclusive): ${drStart} >= ${drEnd}` });
-        }
-        // dateRange が1日以上であること（start == end は0日間 = 無効）
-        if (drStart === drEnd) {
-          errors.push({ field: 'dateRange', message: `dateRange must span at least 1 day (end is exclusive, so start and end cannot be equal)` });
-        }
-      }
-    }
+  // --- temporal チェック ---
+  if (i.temporal === undefined || i.temporal === null) {
+    errors.push({ field: 'temporal', message: 'temporal is required' });
+  } else {
+    validateTimeSpan(i.temporal, errors);
   }
 
   // --- parents チェック ---

@@ -1,20 +1,6 @@
-import { CalendarDate } from './calendarDate';
-
 /**
- * AllDay専用の日付レンジ
- * end は exclusive（含まない）
+ * @deprecated temporal.ts の CalendarDateRange を使用してください
+ * 後方互換性のための再エクスポート
  */
-export interface CalendarDateRange {
-  readonly start: CalendarDate; // inclusive
-  readonly end: CalendarDate;   // exclusive
-}
-
-export function createCalendarDateRange(
-  start: CalendarDate,
-  end: CalendarDate
-): CalendarDateRange {
-  if (end <= start) {
-    throw new Error(`Invalid CalendarDateRange: ${start} - ${end}`);
-  }
-  return { start, end };
-}
+export type { CalendarDateRange } from './temporal';
+export { createCalendarDateRange } from './temporal';

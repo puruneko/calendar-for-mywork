@@ -14,7 +14,7 @@ import { DateTime } from 'luxon';
  */
 export function calculateMinutesFromY(
   yPosition: number,
-  startHour: number = 0,
+  _startHour: number = 0,
   hourHeight: number = 60
 ): number {
   const hoursFromStart = yPosition / hourHeight;

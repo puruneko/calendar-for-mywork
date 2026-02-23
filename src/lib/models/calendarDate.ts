@@ -1,17 +1,25 @@
 import { DateTime } from 'luxon';
+import type { ISODate } from './temporal';
+import { toISODate, parseISODate } from './temporal';
 
-/** YYYY-MM-DD のみを許可する暦日型 */
-export type CalendarDate = string & { readonly __brand: 'CalendarDate' };
+/**
+ * @deprecated ISODate を使用してください
+ * 後方互換性のためのエイリアス
+ */
+export type CalendarDate = ISODate;
 
-/** DateTime → CalendarDate */
-export function toCalendarDate(dt: DateTime): CalendarDate {
-  return dt.toISODate() as CalendarDate;
+/**
+ * @deprecated toISODate を使用してください
+ * DateTime → ISODate（CalendarDate）
+ */
+export function toCalendarDate(dt: DateTime): ISODate {
+  return toISODate(dt);
 }
 
-/** 外部入力 → CalendarDate */
-export function parseCalendarDate(value: string): CalendarDate {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    throw new Error(`Invalid CalendarDate: ${value}`);
-  }
-  return value as CalendarDate;
+/**
+ * @deprecated parseISODate を使用してください
+ * 外部入力 → ISODate（CalendarDate）
+ */
+export function parseCalendarDate(value: string): ISODate {
+  return parseISODate(value);
 }
