@@ -94,6 +94,58 @@ function buildCommon(params: CommonFields): Partial<CalendarItem> {
   };
 }
 
+// ===== タイプ別内部生成関数 =====
+
+/**
+ * Task CalendarItem を生成する内部関数。
+ * バリデーションは呼び出し元の createCalendarItem で行う。
+ */
+function createTaskCalendarItem(params: TimedTaskParams | AllDayTaskParams): Task {
+  const common = buildCommon(params);
+  if (params.dateRange !== undefined) {
+    // AllDayTask
+    return {
+      ...common,
+      type: 'task',
+      status: params.status,
+      dateRange: params.dateRange,
+    } as Task;
+  } else {
+    // TimedTask
+    return {
+      ...common,
+      type: 'task',
+      status: params.status,
+      start: params.start,
+      end: params.end,
+    } as Task;
+  }
+}
+
+/**
+ * Appointment CalendarItem を生成する内部関数。
+ * バリデーションは呼び出し元の createCalendarItem で行う。
+ */
+function createAppointmentCalendarItem(params: TimedAppointmentParams | AllDayAppointmentParams): Appointment {
+  const common = buildCommon(params);
+  if (params.dateRange !== undefined) {
+    // AllDayAppointment
+    return {
+      ...common,
+      type: 'appointment',
+      dateRange: params.dateRange,
+    } as Appointment;
+  } else {
+    // TimedAppointment
+    return {
+      ...common,
+      type: 'appointment',
+      start: params.start,
+      end: params.end,
+    } as Appointment;
+  }
+}
+
 // ===== 統合生成関数 =====
 
 /**
@@ -111,46 +163,14 @@ function buildCommon(params: CommonFields): Partial<CalendarItem> {
  *   dateRange: createCalendarDateRange(toCalendarDate(d), toCalendarDate(d.plus({ days: 2 }))) })
  */
 export function createCalendarItem(params: CalendarItemParams): CalendarItem {
-  const common = buildCommon(params);
-
   let item: CalendarItem;
 
   if (params.type === 'task') {
-    if (params.dateRange !== undefined) {
-      // AllDayTask
-      item = {
-        ...common,
-        type: 'task',
-        status: params.status,
-        dateRange: params.dateRange,
-      } as Task;
-    } else {
-      // TimedTask
-      item = {
-        ...common,
-        type: 'task',
-        status: params.status,
-        start: params.start,
-        end: params.end,
-      } as Task;
-    }
+    item = createTaskCalendarItem(params);
+  } else if (params.type === 'appointment') {
+    item = createAppointmentCalendarItem(params);
   } else {
-    if (params.dateRange !== undefined) {
-      // AllDayAppointment
-      item = {
-        ...common,
-        type: 'appointment',
-        dateRange: params.dateRange,
-      } as Appointment;
-    } else {
-      // TimedAppointment
-      item = {
-        ...common,
-        type: 'appointment',
-        start: params.start,
-        end: params.end,
-      } as Appointment;
-    }
+    throw new Error(`createCalendarItem: unknown type "${(params as any).type}". Supported types are: "task", "appointment".`);
   }
 
   assertValid(item);

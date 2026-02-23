@@ -11,6 +11,32 @@ const tomorrow = toCalendarDate(now.plus({ days: 1 }));
 const dateRange = createCalendarDateRange(today, tomorrow);
 
 describe('createCalendarItem', () => {
+  describe('不正なtype', () => {
+    it('未知のtypeを渡した場合Errorをスローすること', () => {
+      expect(() => createCalendarItem({ type: 'abcdefg' as any, id: 'x', title: 'test', start, end })).toThrow(
+        'unknown type "abcdefg"'
+      );
+    });
+
+    it('typeが空文字の場合Errorをスローすること', () => {
+      expect(() => createCalendarItem({ type: '' as any, id: 'x', title: 'test', start, end })).toThrow(
+        'unknown type ""'
+      );
+    });
+
+    it('typeがundefinedの場合Errorをスローすること', () => {
+      expect(() => createCalendarItem({ type: undefined as any, id: 'x', title: 'test', start, end })).toThrow(
+        'unknown type "undefined"'
+      );
+    });
+
+    it('typeがnullの場合Errorをスローすること', () => {
+      expect(() => createCalendarItem({ type: null as any, id: 'x', title: 'test', start, end })).toThrow(
+        'unknown type "null"'
+      );
+    });
+  });
+
   describe('TimedTask', () => {
     it('正常なTimedTaskを生成できること', () => {
       const item = createCalendarItem({ type: 'task', id: '1', title: 'テスト', status: 'todo', start, end });

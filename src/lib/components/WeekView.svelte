@@ -8,7 +8,7 @@
 
 import { DateTime } from 'luxon';
 import type { CalendarItem } from '../models';
-import { getWeekDays, formatTime, formatWeekday, generateTimeSlots, snapToMinorTick, getItemStart, getItemEnd, itemContainsDay, isTimed } from '../utils';
+import { getWeekDays, formatTime, formatWeekday, formatDate, generateTimeSlots, snapToMinorTick, getItemStart, getItemEnd, itemContainsDay, isTimed, isAllDay, layoutWeekAllDay, type AllDayItem } from '../utils';
 import SettingsModal from './SettingsModal.svelte';
 
 // Z-index層管理は CSS変数で集中管理（demo/App.svelte の :global(:root) に定義）
@@ -156,107 +156,454 @@ let currentTimeLine = $derived.by(() => {
   };
 });
 
-// 各日のアイテムをフィルタリング
-function getItemsForDay(day: DateTime): CalendarItem[] {
-  return items.filter(item => {
-    // AllDayアイテムは除外（別レーンで表示）
-    if (!isTimed(item)) return false;
-    // 時刻付きでも複数日にまたがるアイテムはWeekViewのグリッドには表示しない
-    // （height計算が何千pxにもなりUIが破綻するため。dateRangeで定義すべき）
-    const itemStart = getItemStart(item);
-    const itemEnd = getItemEnd(item);
-    if (itemStart && itemEnd && !itemStart.hasSame(itemEnd.minus({ seconds: 1 }), 'day')) return false;
-    return itemContainsDay(item, day);
-  });
-}
+// ===== allday レーンの計算 =====
 
-// アイテムの重なりを検出して横幅を調整
-function getItemsWithLayout(day: DateTime): Array<CalendarItem & { left: number; width: number }> {
-  const dayItems = getItemsForDay(day);
-  
-  // 時間順にソート
-  const sorted = [...dayItems].sort((a, b) => {
-    const startA = getItemStart(a);
-    const startB = getItemStart(b);
-    if (!startA || !startB) return 0;
-    return startA.toMillis() - startB.toMillis();
+const ALLDAY_ITEM_HEIGHT = 24; // px（1レーンの高さ）
+const ALLDAY_PADDING = 4;      // px（レーン上下の余白）
+
+// allday 対象アイテム: isAllDay アイテム、または複数日にまたがる timed アイテム
+let alldayItems = $derived.by((): AllDayItem[] => {
+  if (!showAllDay) return [];
+  return items
+    .filter(item => {
+      const s = getItemStart(item);
+      const e = getItemEnd(item);
+      if (!s || !e) return false;
+      // allday アイテム、または複数日またがり timed アイテム
+      if (isAllDay(item)) return true;
+      if (isTimed(item) && !s.hasSame(e.minus({ seconds: 1 }), 'day')) return true;
+      return false;
+    })
+    .map(item => {
+      const s = getItemStart(item)!;
+      const e = getItemEnd(item)!;
+      let endDateStr: string;
+      if (item.dateRange) {
+        endDateStr = formatDate(e);
+      } else {
+        // timed の複数日アイテム: end は inclusive 時刻なので翌日 startOfDay を exclusive end とする
+        endDateStr = formatDate(e.plus({ days: 1 }).startOf('day'));
+      }
+      return {
+        id: item.id,
+        dateRange: {
+          start: formatDate(s),
+          end: endDateStr,
+        },
+      };
+    });
+});
+
+// allday レーンレイアウトを計算
+let alldayLayout = $derived.by(() => {
+  if (weekDays.length === 0) return { laneCount: 0, placements: [] };
+  const weekStart = formatDate(weekDays[0]);
+  const weekEnd = formatDate(weekDays[weekDays.length - 1].plus({ days: 1 }));
+  return layoutWeekAllDay({ weekStart, weekEnd, items: alldayItems });
+});
+
+// allday レーン数と高さ（px）
+let alldayLaneCount = $derived(alldayLayout.laneCount);
+let alldayHeight = $derived(
+  alldayLaneCount > 0
+    ? alldayLaneCount * ALLDAY_ITEM_HEIGHT + ALLDAY_PADDING * 2
+    : 0
+);
+
+// allday-item の配置情報（CalendarItem と placement を結合）
+type PositionedAlldayItem = {
+  item: CalendarItem;
+  lane: number;
+  startIndex: number;
+  span: number;
+  top: number;   // px
+  left: string;  // CSS % 文字列
+  width: string; // CSS % 文字列
+};
+
+let alldayPositioned = $derived.by((): PositionedAlldayItem[] => {
+  const cols = weekDays.length;
+  return alldayLayout.placements.map(p => {
+    const item = items.find(i => i.id === p.id)!;
+    return {
+      item,
+      lane: p.lane,
+      startIndex: p.startIndex,
+      span: p.span,
+      top: ALLDAY_PADDING + p.lane * ALLDAY_ITEM_HEIGHT,
+      left: `calc(${p.startIndex} / ${cols} * 100% + 4px)`,
+      width: `calc(${p.span} / ${cols} * 100% - 8px)`,
+    };
   });
-  
-  // 重なりグループを検出
-  const groups: CalendarItem[][] = [];
-  let currentGroup: CalendarItem[] = [];
-  
-  sorted.forEach((item, index) => {
-    const itemStart = getItemStart(item);
-    const itemEnd = getItemEnd(item);
-    if (!itemStart || !itemEnd) return;
-    
-    if (currentGroup.length === 0) {
-      currentGroup.push(item);
-    } else {
-      // 現在のグループの最後のアイテムと重なるかチェック
-      const lastItem = currentGroup[currentGroup.length - 1];
-      const lastEnd = getItemEnd(lastItem);
-      if (lastEnd && itemStart < lastEnd) {
+});
+
+// ===== 週全体レイアウトの一括計算 =====
+
+/**
+ * 週全体に表示するアイテムのレイアウトを一括計算する。
+ * 各アイテムの top/height/left/width/styleStr を確定し、
+ * dayIndex（0〜6）をキーとする Map として返す。
+ *
+ * 設計方針:
+ *  - 全アイテムを一度走査して今週の表示対象を抽出
+ *  - 各日ごとに重なり判定とカラム配置を計算
+ *  - グループ判定はグループ内の最大 end と比較（従来バグ修正）
+ *  - styleStr を derived 内で確定させ、テンプレート側では参照のみ
+ */
+type PositionedItem = CalendarItem & {
+  top: number;        // px (day-grid 上端からの距離、クリップ済み)
+  height: number;     // px (クリップ済み)
+  left: number;       // % (day-grid 幅に対する割合)
+  width: number;      // % (day-grid 幅に対する割合)
+  styleStr: string;   // 最終的な style 文字列
+  clipTop: boolean;   // 開始時刻が startHour より前（上端クリップ）
+  clipBottom: boolean; // 終了時刻が endHour より後（下端クリップ）
+};
+
+let weekLayout = $derived.by((): Map<number, PositionedItem[]> => {
+  const result = new Map<number, PositionedItem[]>();
+  const hourHeight = 60; // 1時間 = 60px (固定)
+
+  // --- ステップ1: 今週の各日に表示すべき timed アイテムを抽出 ---
+  // dayIndex → CalendarItem[] のマップを作る
+  const dayItems: CalendarItem[][] = weekDays.map(day =>
+    items.filter(item => {
+      if (!isTimed(item)) return false;
+      // 複数日またがりアイテムはグリッドに表示しない
+      const s = getItemStart(item);
+      const e = getItemEnd(item);
+      if (s && e && !s.hasSame(e.minus({ seconds: 1 }), 'day')) return false;
+      if (!itemContainsDay(item, day)) return false;
+      // 表示時刻範囲の完全外側にあるアイテムは除外
+      // アイテムの終了時刻 ≤ startHour、または開始時刻 ≥ endHour
+      const dayStart = day.startOf('day');
+      const rangeStart = dayStart.set({ hour: startHour, minute: 0, second: 0, millisecond: 0 });
+      const rangeEnd = dayStart.set({ hour: 0, minute: 0, second: 0, millisecond: 0 }).plus({ hours: endHour });
+      if (s && e && (e <= rangeStart || s >= rangeEnd)) return false;
+      return true;
+    })
+  );
+
+  // --- ステップ2: 各日のアイテムにカラム配置を適用 ---
+  weekDays.forEach((day, dayIndex) => {
+    const sorted = [...dayItems[dayIndex]].sort((a, b) => {
+      const sA = getItemStart(a);
+      const sB = getItemStart(b);
+      if (!sA || !sB) return 0;
+      return sA.toMillis() - sB.toMillis();
+    });
+
+    // --- グループ化: グループ内最大 end との比較 (バグ修正) ---
+    const groups: CalendarItem[][] = [];
+    let currentGroup: CalendarItem[] = [];
+    let groupMaxEnd: DateTime | null = null;
+
+    sorted.forEach((item, index) => {
+      const itemStart = getItemStart(item);
+      const itemEnd = getItemEnd(item);
+      if (!itemStart || !itemEnd) return;
+
+      if (currentGroup.length === 0) {
         currentGroup.push(item);
+        groupMaxEnd = itemEnd;
+      } else if (groupMaxEnd && itemStart < groupMaxEnd) {
+        // 現在のグループの最大 end より前に始まる → 同グループ
+        currentGroup.push(item);
+        if (itemEnd > groupMaxEnd) groupMaxEnd = itemEnd;
       } else {
         // 新しいグループ開始
         groups.push(currentGroup);
         currentGroup = [item];
+        groupMaxEnd = itemEnd;
       }
-    }
-    
-    // 最後のアイテム
-    if (index === sorted.length - 1) {
-      groups.push(currentGroup);
-    }
-  });
-  
-  // 各グループ内でレイアウトを計算
-  const result: Array<CalendarItem & { left: number; width: number }> = [];
-  
-  groups.forEach(group => {
-    const columns: CalendarItem[][] = [];
-    
-    group.forEach(item => {
-      // このアイテムが配置できる最初の列を探す
-      let placed = false;
-      for (let col = 0; col < columns.length; col++) {
-        const columnItems = columns[col];
-        const canPlace = columnItems.every(existing => {
-          const existingEnd = getItemEnd(existing);
-          const itemStart = getItemStart(item);
-          return !existingEnd || !itemStart || existingEnd <= itemStart;
-        });
-        
-        if (canPlace) {
-          columnItems.push(item);
-          placed = true;
-          break;
-        }
-      }
-      
-      // 配置できる列がなければ新しい列を作成
-      if (!placed) {
-        columns.push([item]);
+
+      if (index === sorted.length - 1) {
+        groups.push(currentGroup);
       }
     });
-    
-    // 各アイテムの位置を計算
-    const columnWidth = 100 / columns.length;
-    
-    columns.forEach((column, colIndex) => {
-      column.forEach(item => {
-        result.push({
-          ...item,
-          left: colIndex * columnWidth,
-          width: columnWidth
+
+    // --- カラム配置 ---
+    const positionedForDay: PositionedItem[] = [];
+
+    groups.forEach(group => {
+      const columns: CalendarItem[][] = [];
+
+      group.forEach(item => {
+        let placed = false;
+        for (let col = 0; col < columns.length; col++) {
+          const canPlace = columns[col].every(existing => {
+            const existingEnd = getItemEnd(existing);
+            const iStart = getItemStart(item);
+            return !existingEnd || !iStart || existingEnd <= iStart;
+          });
+          if (canPlace) {
+            columns[col].push(item);
+            placed = true;
+            break;
+          }
+        }
+        if (!placed) {
+          columns.push([item]);
+        }
+      });
+
+      const columnCount = columns.length;
+      const columnWidth = 100 / columnCount;
+
+      columns.forEach((column, colIndex) => {
+        column.forEach(item => {
+          const itemStart = getItemStart(item)!;
+          const itemEnd = getItemEnd(item)!;
+
+          const dayStart = day.startOf('day').set({ hour: startHour });
+          const rangeEnd = day.startOf('day').set({ hour: 0, minute: 0, second: 0, millisecond: 0 }).plus({ hours: endHour });
+
+          // クリップフラグを計算
+          const clipTop = itemStart < dayStart;
+          const clipBottom = itemEnd > rangeEnd;
+
+          // top・height をクリップ済み値に変換
+          const clippedStart = clipTop ? dayStart : itemStart;
+          const clippedEnd = clipBottom ? rangeEnd : itemEnd;
+
+          const minutesFromStart = clippedStart.diff(dayStart, 'minutes').minutes;
+          const durationMinutes = clippedEnd.diff(clippedStart, 'minutes').minutes;
+
+          const topOffset = minorTick; // 開始時刻前の ▲インジケーター領域分のオフセット(px)
+          const top = (minutesFromStart / 60) * hourHeight + topOffset;
+          const height = (durationMinutes / 60) * hourHeight;
+          const left = colIndex * columnWidth;
+          const width = columnWidth;
+
+          // styleStr を確定
+          const styleStr = buildStyleStr(item, top, height, left, width);
+
+          positionedForDay.push({
+            ...item,
+            top,
+            height,
+            left,
+            width,
+            styleStr,
+            clipTop,
+            clipBottom,
+          });
         });
       });
     });
+
+    result.set(dayIndex, positionedForDay);
   });
-  
+
   return result;
+});
+
+/** top/height/left/width + カスタムスタイルを結合して style 文字列を生成 */
+function buildStyleStr(
+  item: CalendarItem,
+  top: number,
+  height: number,
+  left: number,
+  width: number,
+): string {
+  let str = `top: ${top}px; height: ${height}px; left: ${left}%; width: ${width}%;`;
+
+  if (item.style) {
+    const customParts: string[] = [];
+    for (const [key, value] of Object.entries(item.style)) {
+      if (value === undefined || value === null || value === '') continue;
+      const cssKey = key.replace(/([A-Z])/g, '-$1').toLowerCase();
+      if ((cssKey === 'color' || cssKey === 'background-color' || cssKey === 'background') && typeof value === 'string') {
+        const v = applyDefaultOpacity(value, defaultColorOpacity);
+        if (v) customParts.push(`${cssKey}: ${v}`);
+      } else {
+        customParts.push(`${cssKey}: ${value}`);
+      }
+    }
+    if (customParts.length > 0) {
+      str += ' ' + customParts.join('; ') + ';';
+    }
+  }
+
+  return str;
+}
+
+// allday アイテムの背景色を取得（MonthView と同じロジック）
+function getItemBgColor(item: CalendarItem): string {
+  if (item.style?.backgroundColor && typeof item.style.backgroundColor === 'string') {
+    return item.style.backgroundColor;
+  }
+  if (item.type === 'task') {
+    const task = item as any;
+    if (task.status === 'todo') return '#90caf9';
+    if (task.status === 'doing') return '#ffb74d';
+    if (task.status === 'done') return '#a5d6a7';
+  }
+  return '#ce93d8';
+}
+
+// allday DnD 状態
+let alldayDraggedItem = $state<CalendarItem | null>(null);
+let alldayDragOverDay = $state<DateTime | null>(null);
+let alldayDragOffsetDays = $state<number>(0);
+let alldayDragGrabbedDate = $state<DateTime | null>(null);
+
+// allday リサイズ状態
+let alldayResizingItem = $state<CalendarItem | null>(null);
+let alldayResizeEdge = $state<'left' | 'right' | null>(null);
+let alldayResizeStartX = $state<number>(0);
+let alldayResizeStartDay = $state<DateTime | null>(null);
+
+// allday DnD: ドラッグ開始
+function handleAlldayDragStart(event: DragEvent, item: CalendarItem, barStartIndex: number) {
+  const target = event.target as HTMLElement;
+  const barElement = target.closest('.allday-item') as HTMLElement;
+
+  const itemStart = getItemStart(item);
+  let newDragOffsetDays = 0;
+  let newDragGrabbedDate: DateTime | null = null;
+
+  if (itemStart) {
+    const barRect = barElement?.getBoundingClientRect();
+    if (barRect && barRect.width > 0) {
+      const span = parseInt(barElement?.dataset?.span ?? '1') || 1;
+      const perCellWidth = barRect.width / span;
+      const mouseXInBar = event.clientX - barRect.left;
+      const grabCellInBar = Math.max(0, Math.min(Math.floor(mouseXInBar / perCellWidth), span - 1));
+      const weekGrabIndex = barStartIndex + grabCellInBar;
+      const grabbedDay = weekDays[weekGrabIndex] ?? weekDays[barStartIndex];
+      newDragOffsetDays = Math.floor(grabbedDay.startOf('day').diff(itemStart.startOf('day'), 'days').days);
+      newDragGrabbedDate = grabbedDay.startOf('day');
+    } else {
+      newDragGrabbedDate = itemStart.startOf('day');
+    }
+  }
+
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', item.id);
+  }
+
+  requestAnimationFrame(() => {
+    alldayDraggedItem = item;
+    alldayDragOffsetDays = newDragOffsetDays;
+    alldayDragGrabbedDate = newDragGrabbedDate;
+    if (barElement) barElement.style.opacity = '0.5';
+  });
+}
+
+// allday DnD: ドラッグ終了
+function handleAlldayDragEnd(event: DragEvent) {
+  const target = event.target as HTMLElement;
+  const barElement = target.closest('.allday-item') as HTMLElement;
+  if (barElement) barElement.style.opacity = '1';
+  alldayDraggedItem = null;
+  alldayDragOverDay = null;
+  alldayDragGrabbedDate = null;
+}
+
+// allday DnD: ドラッグオーバー
+function handleAlldayDragOver(event: DragEvent, day: DateTime) {
+  event.preventDefault();
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+  alldayDragOverDay = day;
+}
+
+// allday DnD: ドロップ
+function handleAlldayDrop(event: DragEvent, day: DateTime) {
+  event.preventDefault();
+  if (!alldayDraggedItem) return;
+
+  const itemStart = getItemStart(alldayDraggedItem);
+  const itemEnd = getItemEnd(alldayDraggedItem);
+  if (!itemStart || !itemEnd) return;
+
+  const duration = itemEnd.diff(itemStart, 'days').days;
+  const newStart = day.startOf('day').minus({ days: alldayDragOffsetDays });
+  const newEnd = newStart.plus({ days: duration });
+
+  onItemMove?.(alldayDraggedItem, newStart, newEnd);
+
+  alldayDraggedItem = null;
+  alldayDragOverDay = null;
+  alldayDragOffsetDays = 0;
+}
+
+// allday リサイズ: 開始
+function handleAlldayResizeStart(event: MouseEvent, item: CalendarItem, edge: 'left' | 'right') {
+  event.stopPropagation();
+  event.preventDefault();
+
+  const target = event.currentTarget as HTMLElement;
+  const parentBar = target.closest('.allday-item') as HTMLElement;
+  if (parentBar) parentBar.setAttribute('draggable', 'false');
+
+  alldayResizingItem = item;
+  alldayResizeEdge = edge;
+  alldayResizeStartX = event.clientX;
+
+  const itemStart = getItemStart(item);
+  if (itemStart) alldayResizeStartDay = itemStart.startOf('day');
+
+  document.addEventListener('mousemove', handleAlldayResizeMove);
+  document.addEventListener('mouseup', handleAlldayResizeEnd);
+}
+
+// allday リサイズ: 移動中
+function handleAlldayResizeMove(event: MouseEvent) {
+  if (!alldayResizingItem || !alldayResizeEdge || !alldayResizeStartDay) return;
+
+  const itemStart = getItemStart(alldayResizingItem);
+  const itemEnd = getItemEnd(alldayResizingItem);
+  if (!itemStart || !itemEnd) return;
+
+  // day-column の幅を取得（最初の allday-item から計算）
+  const firstDayColumn = document.querySelector('.day-column') as HTMLElement;
+  if (!firstDayColumn) return;
+  const cellWidth = firstDayColumn.getBoundingClientRect().width;
+
+  const deltaX = event.clientX - alldayResizeStartX;
+  const deltaDays = Math.round(deltaX / cellWidth);
+
+  let newStart = itemStart;
+  let newEnd = itemEnd;
+
+  if (alldayResizeEdge === 'left') {
+    newStart = alldayResizeStartDay.plus({ days: deltaDays }).set({
+      hour: itemStart.hour, minute: itemStart.minute
+    });
+    if (newStart >= itemEnd.startOf('day')) {
+      newStart = itemEnd.startOf('day').minus({ days: 1 }).set({
+        hour: itemStart.hour, minute: itemStart.minute
+      });
+    }
+  } else {
+    const originalEnd = itemEnd.startOf('day');
+    newEnd = originalEnd.plus({ days: deltaDays }).set({
+      hour: itemEnd.hour, minute: itemEnd.minute
+    });
+    if (newEnd.startOf('day') <= itemStart.startOf('day')) {
+      newEnd = itemStart.startOf('day').plus({ days: 1 }).set({
+        hour: itemEnd.hour, minute: itemEnd.minute
+      });
+    }
+  }
+
+  onItemResize?.(alldayResizingItem, newStart, newEnd);
+}
+
+// allday リサイズ: 終了
+function handleAlldayResizeEnd() {
+  document.removeEventListener('mousemove', handleAlldayResizeMove);
+  document.removeEventListener('mouseup', handleAlldayResizeEnd);
+
+  const allBars = document.querySelectorAll('.allday-item');
+  allBars.forEach(el => (el as HTMLElement).setAttribute('draggable', 'true'));
+
+  alldayResizingItem = null;
+  alldayResizeEdge = null;
+  alldayResizeStartX = 0;
+  alldayResizeStartDay = null;
 }
 
 // アイテムクリックハンドラ
@@ -390,7 +737,8 @@ let dragPreviewStyle = $derived.by(() => {
   const itemTopY = currentDragOverY - dragOffset;
   
   // アイテムの上端位置から時刻を計算
-  const y = itemTopY - targetDayRect.top;
+  // minorTick px 分の ▲インジケーター領域が先頭に常時確保されているためオフセットを減算
+  const y = itemTopY - targetDayRect.top - minorTick;
   const hourHeight = 60;
   const hoursFromStart = y / hourHeight;
   const minutesFromStart = hoursFromStart * 60;
@@ -408,7 +756,7 @@ let dragPreviewStyle = $derived.by(() => {
   
   return {
     day: currentDragOverDay,
-    top: (top / 60) * hourHeight,
+    top: (top / 60) * hourHeight + minorTick, // minorTick px 分のオフセットを加算
     height: (height / 60) * hourHeight,
     newStart,
     newEnd: newStart.plus({ minutes: duration })
@@ -516,6 +864,64 @@ function handleSettingsChange(settings: {
   onSettingsChange?.(settings);
 }
 
+// ▲インジケータークリック：startHour を majorTick 単位でアイテム開始時刻以前に拡張
+function handleExpandStart(item: CalendarItem) {
+  const itemStart = getItemStart(item);
+  if (!itemStart) return;
+
+  // アイテム開始時刻を majorTick 単位（時間単位）で切り捨て、0時を下限に
+  const itemHour = itemStart.hour;
+  const itemMinute = itemStart.minute;
+  // majorTick 単位での切り捨て（例：19:30 → 19:00）
+  const majorTickHours = majorTick / 60;
+  const newStartHour = Math.max(0, Math.floor(itemHour / majorTickHours) * majorTickHours);
+
+  // すでに表示範囲内なら変更不要
+  if (newStartHour >= startHour) return;
+
+  handleSettingsChange({
+    minorTick,
+    startHour: newStartHour,
+    endHour,
+    showWeekend,
+    showAllDay,
+    defaultColorOpacity,
+    weekStartsOn,
+    itemRightMargin,
+    showParent,
+    parentDisplayIndex,
+  });
+}
+
+// ▼インジケータークリック：endHour を majorTick 単位でアイテム終了時刻以降に拡張
+function handleExpandEnd(item: CalendarItem) {
+  const itemEnd = getItemEnd(item);
+  if (!itemEnd) return;
+
+  // アイテム終了時刻を majorTick 単位（時間単位）で切り上げ、24時を上限に
+  const itemHour = itemEnd.hour;
+  const itemMinute = itemEnd.minute;
+  // majorTick 単位での切り上げ（例：19:30 → 20:00）
+  const majorTickHours = majorTick / 60;
+  const newEndHour = Math.min(24, Math.ceil((itemHour + itemMinute / 60) / majorTickHours) * majorTickHours);
+
+  // すでに表示範囲内なら変更不要
+  if (newEndHour <= endHour) return;
+
+  handleSettingsChange({
+    minorTick,
+    startHour,
+    endHour: newEndHour,
+    showWeekend,
+    showAllDay,
+    defaultColorOpacity,
+    weekStartsOn,
+    itemRightMargin,
+    showParent,
+    parentDisplayIndex,
+  });
+}
+
 // セルクリックハンドラ
 function handleCellClick(event: MouseEvent, day: DateTime) {
   // アイテムクリックの場合はイベントが伝播しないのでここには来ない
@@ -529,8 +935,9 @@ function handleCellClick(event: MouseEvent, day: DateTime) {
   };
   
   // Y座標から時刻を計算
+  // minorTick px 分の ▲インジケーター領域が先頭に確保されているためオフセットを減算
   const hourHeight = 60; // 1時間あたりのピクセル高さ
-  const minutesFromStart = (clickPosition.y / hourHeight) * 60;
+  const minutesFromStart = ((clickPosition.y - minorTick) / hourHeight) * 60;
   const clickDateTime = day.startOf('day').set({ hour: startHour }).plus({ minutes: minutesFromStart });
   
   // 親コンポーネントに通知
@@ -570,68 +977,6 @@ function applyDefaultOpacity(color: string | undefined, opacity: number): string
   return `color-mix(in srgb, ${color} ${opacity * 100}%, transparent)`;
 }
 
-// アイテムの位置とサイズを計算（横幅調整あり + カスタムスタイル適用）
-function getItemStyle(item: CalendarItem & { left?: number; width?: number }): string {
-  const itemStart = getItemStart(item);
-  const itemEnd = getItemEnd(item);
-  if (!itemStart || !itemEnd) return '';
-  
-  const dayStart = itemStart.startOf('day').set({ hour: startHour });
-  const minutesFromStart = itemStart.diff(dayStart, 'minutes').minutes;
-  const duration = itemEnd.diff(itemStart, 'minutes').minutes;
-  
-  const hourHeight = 60; // 1時間あたりのピクセル高さ
-  const top = (minutesFromStart / 60) * hourHeight;
-  const height = (duration / 60) * hourHeight;
-  
-  // 重なり時の横位置・横幅
-  const left = item.left !== undefined ? `${item.left}%` : '0px';
-  const width = item.width !== undefined ? `${item.width}%` : '100%';
-  
-  // 基本スタイル
-  let styleStr = item.left !== undefined && item.width !== undefined
-    ? `top: ${top}px; height: ${height}px; left: ${left}; width: ${width};`
-    : `top: ${top}px; height: ${height}px;`;
-  
-  // カスタムスタイルを適用
-  if (item.style) {
-    const customStyles: string[] = [];
-    
-    // デバッグ: styleプロパティの内容を確認
-    if (item.title.includes('カスタムスタイル')) {
-      console.debug(`[DEBUG] ${item.title} - style:`, item.style);
-      console.debug(`[DEBUG] Object.entries:`, Object.entries(item.style));
-    }
-    
-    for (const [key, value] of Object.entries(item.style)) {
-      if (value !== undefined && value !== null && value !== '') {
-        // キャメルケースをケバブケースに変換 (backgroundColor -> background-color)
-        const cssKey = key.replace(/([A-Z])/g, '-$1').toLowerCase();
-        
-        // colorプロパティの場合、透明度を自動追加
-        if ((cssKey === 'color' || cssKey === 'background-color' || cssKey === 'background') && typeof value === 'string') {
-          const colorWithOpacity = applyDefaultOpacity(value, defaultColorOpacity);
-          if (colorWithOpacity) {
-            customStyles.push(`${cssKey}: ${colorWithOpacity}`);
-          }
-        } else {
-          customStyles.push(`${cssKey}: ${value}`);
-        }
-      }
-    }
-    
-    if (item.title.includes('カスタムスタイル')) {
-      console.debug(`[DEBUG] ${item.title} - customStyles:`, customStyles);
-    }
-    
-    if (customStyles.length > 0) {
-      styleStr += ' ' + customStyles.join('; ') + ';';
-    }
-  }
-  
-  return styleStr;
-}
-
 // アイテムのCSSクラスを取得
 function getItemClass(item: CalendarItem): string {
   if (item.type === 'task') {
@@ -653,11 +998,11 @@ function getItemClass(item: CalendarItem): string {
       </svg>
     </button>
     <button class="nav-button" onclick={goToPreviousWeek}>◀</button>
+    <button class="nav-button" onclick={goToNextWeek}>▶</button>
     <button class="nav-button today" onclick={goToToday}>今日</button>
     <span class="week-title">
       {weekDays[0].toFormat('yyyy年M月d日')} - {weekDays[weekDays.length - 1].toFormat('M月d日')}
     </span>
-    <button class="nav-button" onclick={goToNextWeek}>▶</button>
   </div>
   
   <!-- 設定モーダル -->
@@ -683,9 +1028,19 @@ function getItemClass(item: CalendarItem): string {
     <!-- 時刻列 -->
     <div class="time-column">
       <div class="time-header"></div>
+      <!-- allday レーンの高さ分のスペーサー（allday-row と高さを同期） -->
+      {#if alldayHeight > 0}
+        <div class="time-allday-spacer" style="height: {alldayHeight}px;">
+          <span class="time-allday-label">ALLDAY</span>
+        </div>
+      {/if}
+      <!-- 常時 1 minorTick 分の余白（▲インジケーター表示領域・開始時刻前） -->
+      <div class="time-slot time-slot-minor-padding" style="height: {minorTick}px;"></div>
       {#each timeSlots as slot}
         <div class="time-slot">{formatTime(slot)}</div>
       {/each}
+      <!-- 常時 1 minorTick 分の余白（▼インジケーター表示領域・終了時刻後） -->
+      <div class="time-slot-minor-padding" style="height: {minorTick}px;"></div>
     </div>
 
     <!-- 各曜日の列 -->
@@ -697,6 +1052,90 @@ function getItemClass(item: CalendarItem): string {
           <div class="date">{day.day}</div>
         </div>
 
+        <!-- allday レーン（終日・複数日アイテムを表示） -->
+        {#if alldayHeight > 0}
+          <div
+            class="day-allday"
+            style="height: {alldayHeight}px;"
+          >
+            <!-- 縦罫線（各 day-column の右端） -->
+            <div class="allday-border-right {dayIndex < weekDays.length - 1 ? 'has-border' : ''}"></div>
+            <!-- allday バー：この列が startIndex と一致するアイテムのみここで絶対配置 -->
+            <!-- バーの left/width は day-column 全体ではなく、allday-canvas（全曜日をまたぐ絶対座標）で管理するため
+                 ここでは dayIndex=0 の列にのみ allday-canvas を配置する -->
+            {#if dayIndex === 0}
+              <div
+                class="allday-canvas"
+                style="width: calc(100% * {weekDays.length});"
+              >
+                <!-- DnD ドロップ受け取り用グリッド -->
+                <div class="allday-drop-grid" style="grid-template-columns: repeat({weekDays.length}, minmax(0, 1fr));">
+                  {#each weekDays as dropDay, dropIdx}
+                    <div
+                      class="allday-drop-cell"
+                      class:drag-over={alldayDragOverDay?.hasSame(dropDay, 'day')}
+                      ondragover={(e) => handleAlldayDragOver(e, dropDay)}
+                      ondrop={(e) => handleAlldayDrop(e, dropDay)}
+                    ></div>
+                  {/each}
+                </div>
+                {#each alldayPositioned as p (p.item.id)}
+                  <div
+                    class="allday-item"
+                    class:dragging={alldayDraggedItem?.id === p.item.id}
+                    draggable="true"
+                    data-span={p.span}
+                    style="top: {p.top}px; left: {p.left}; width: {p.width}; background-color: {getItemBgColor(p.item)};"
+                    ondragstart={(e) => handleAlldayDragStart(e, p.item, p.startIndex)}
+                    ondragend={handleAlldayDragEnd}
+                    ondragover={(e) => {
+                      e.preventDefault();
+                      // allday バー上でのドラッグオーバーは、対応する曜日のドロップセルに委譲
+                      const barLeft = (e.currentTarget as HTMLElement).getBoundingClientRect().left;
+                      const barWidth = (e.currentTarget as HTMLElement).getBoundingClientRect().width;
+                      const spanCount = p.span;
+                      const cellWidth = barWidth / spanCount;
+                      const mouseXInBar = e.clientX - barLeft;
+                      const cellIndex = Math.max(0, Math.min(Math.floor(mouseXInBar / cellWidth), spanCount - 1));
+                      const dayIndex = p.startIndex + cellIndex;
+                      const targetDay = weekDays[dayIndex];
+                      if (targetDay) handleAlldayDragOver(e, targetDay);
+                    }}
+                    ondrop={(e) => {
+                      e.preventDefault();
+                      // allday バー上でのドロップは、対応する曜日に委譲
+                      const barLeft = (e.currentTarget as HTMLElement).getBoundingClientRect().left;
+                      const barWidth = (e.currentTarget as HTMLElement).getBoundingClientRect().width;
+                      const spanCount = p.span;
+                      const cellWidth = barWidth / spanCount;
+                      const mouseXInBar = e.clientX - barLeft;
+                      const cellIndex = Math.max(0, Math.min(Math.floor(mouseXInBar / cellWidth), spanCount - 1));
+                      const dayIndex = p.startIndex + cellIndex;
+                      const targetDay = weekDays[dayIndex];
+                      if (targetDay) handleAlldayDrop(e, targetDay);
+                    }}
+                    onclick={(e) => { e.stopPropagation(); onItemClick?.(p.item); }}
+                    role="button"
+                    tabindex="0"
+                  >
+                    <!-- 左端リサイズハンドル -->
+                    <div
+                      class="allday-resize-handle allday-resize-handle-left"
+                      onmousedown={(e) => handleAlldayResizeStart(e, p.item, 'left')}
+                    ></div>
+                    <div class="allday-bar-content">{p.item.title}</div>
+                    <!-- 右端リサイズハンドル -->
+                    <div
+                      class="allday-resize-handle allday-resize-handle-right"
+                      onmousedown={(e) => handleAlldayResizeStart(e, p.item, 'right')}
+                    ></div>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        {/if}
+
         <!-- 時間グリッド -->
         <div 
           class="day-grid"
@@ -704,15 +1143,29 @@ function getItemClass(item: CalendarItem): string {
           ondrop={(e) => handleDrop(e, day)}
           onclick={(e) => handleCellClick(e, day)}
         >
+          <!-- 常時 1 minorTick 分の余白（▲インジケーター表示領域・開始時刻前） -->
+          <div
+            class="grid-cell grid-cell-minor-padding"
+            style="height: {minorTick}px;"
+            ondragover={(e) => handleDayDragOver(e, day)}
+            ondrop={(e) => handleDrop(e, day)}
+          ></div>
           {#each timeSlots as slot}
             <div class="grid-cell"></div>
           {/each}
+          <!-- 常時 1 minorTick 分の余白（▼インジケーター表示領域・終了時刻後） -->
+          <div
+            class="grid-cell-minor-padding"
+            style="height: {minorTick}px;"
+            ondragover={(e) => handleDayDragOver(e, day)}
+            ondrop={(e) => handleDrop(e, day)}
+          ></div>
           
           <!-- minorTickグリッド線 -->
           {#each minorGridLines as minutes}
             <div 
               class="minor-grid-line" 
-              style="top: {minutes}px;"
+              style="top: {minutes + minorTick}px;"
             ></div>
           {/each}
           
@@ -722,7 +1175,7 @@ function getItemClass(item: CalendarItem): string {
             {@const opacity = isToday ? 0.75 : 0.3}
             <div 
               class="current-time-line" 
-              style="top: {currentTimeLine.position}px; background-color: rgba(244, 67, 54, {opacity});"
+              style="top: {currentTimeLine.position + minorTick}px; background-color: rgba(244, 67, 54, {opacity});"
             ></div>
           {/if}
 
@@ -736,23 +1189,25 @@ function getItemClass(item: CalendarItem): string {
 
           <!-- アイテム表示 -->
           <div class="items-container" style="right: {itemRightMargin}px;">
-            {#each getItemsWithLayout(day) as item (item.id)}
+            {#each weekLayout.get(dayIndex) ?? [] as item (item.id)}
               <div
-                class="{getItemClass(item)} {draggedItem?.id === item.id ? 'dragging' : ''}"
-                style={getItemStyle(item)}
+                class="{getItemClass(item)} {draggedItem?.id === item.id ? 'dragging' : ''} {item.clipTop ? 'clip-top' : ''} {item.clipBottom ? 'clip-bottom' : ''}"
+                style={item.styleStr}
                 draggable="true"
                 ondragstart={(e) => handleDragStart(e, item)}
                 ondragend={handleDragEnd}
               >
-                <!-- リサイズハンドル（上端） -->
-                <div 
-                  class="resize-handle resize-handle-top"
-                  onmousedown={(e) => handleResizeStart(e, item, 'top')}
-                  ondragstart={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                  draggable="false"
-                  role="slider"
-                  aria-label="開始時刻を変更"
-                ></div>
+                <!-- リサイズハンドル（上端）- clipTop のときは表示しない -->
+                {#if !item.clipTop}
+                  <div 
+                    class="resize-handle resize-handle-top"
+                    onmousedown={(e) => handleResizeStart(e, item, 'top')}
+                    ondragstart={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                    draggable="false"
+                    role="slider"
+                    aria-label="開始時刻を変更"
+                  ></div>
+                {/if}
                 
                 <!-- アイテム本体（クリック可能） -->
                 <div
@@ -774,16 +1229,54 @@ function getItemClass(item: CalendarItem): string {
                   {/if}
                 </div>
                 
-                <!-- リサイズハンドル（下端） -->
-                <div 
-                  class="resize-handle resize-handle-bottom"
-                  onmousedown={(e) => handleResizeStart(e, item, 'bottom')}
-                  ondragstart={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                  draggable="false"
-                  role="slider"
-                  aria-label="終了時刻を変更"
-                ></div>
+                <!-- リサイズハンドル（下端）- clipBottom のときは表示しない -->
+                {#if !item.clipBottom}
+                  <div 
+                    class="resize-handle resize-handle-bottom"
+                    onmousedown={(e) => handleResizeStart(e, item, 'bottom')}
+                    ondragstart={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                    draggable="false"
+                    role="slider"
+                    aria-label="終了時刻を変更"
+                  ></div>
+                {/if}
               </div>
+            {/each}
+
+            <!-- ▲ インジケーター（アイテム外側・上に独立配置） -->
+            {#each weekLayout.get(dayIndex) ?? [] as item (item.id + '-above')}
+              {#if item.clipTop}
+                {@const svgSize = minorTick - 4}
+                <div
+                  class="clip-indicator-above"
+                  style="top: {item.top - minorTick}px; height: {minorTick}px; left: {item.left}%; width: {item.width}%;"
+                  aria-label="開始時刻は表示範囲より前"
+                  role="button"
+                  tabindex="0"
+                  onclick={(e) => { e.stopPropagation(); handleExpandStart(item); }}
+                  onkeydown={(e) => e.key === 'Enter' && handleExpandStart(item)}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width={svgSize} height={svgSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 11l-5-5-5 5M17 18l-5-5-5 5"/></svg>
+                </div>
+              {/if}
+            {/each}
+
+            <!-- ▼ インジケーター（アイテム外側・下に独立配置） -->
+            {#each weekLayout.get(dayIndex) ?? [] as item (item.id + '-below')}
+              {#if item.clipBottom}
+                {@const svgSize = minorTick - 4}
+                <div
+                  class="clip-indicator-below"
+                  style="top: {item.top + item.height}px; height: {minorTick}px; left: {item.left}%; width: {item.width}%;"
+                  aria-label="終了時刻は表示範囲より後"
+                  role="button"
+                  tabindex="0"
+                  onclick={(e) => { e.stopPropagation(); handleExpandEnd(item); }}
+                  onkeydown={(e) => e.key === 'Enter' && handleExpandEnd(item)}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width={svgSize} height={svgSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 13l5 5 5-5M7 6l5 5 5-5"/></svg>
+                </div>
+              {/if}
             {/each}
           </div>
         </div>
@@ -798,6 +1291,7 @@ function getItemClass(item: CalendarItem): string {
     height: 100%;
     display: flex;
     flex-direction: column;
+    min-height: 0;
     background: var(--calendar-bg, #ffffff);
     color: var(--calendar-text-color, #333333);
     font-family: var(--calendar-font-family, 'Segoe UI', sans-serif);
@@ -853,6 +1347,7 @@ function getItemClass(item: CalendarItem): string {
     display: flex;
     flex: 1;
     overflow: auto;
+    /* スティッキーヘッダーが機能するためにはスクロールコンテナが overflow:auto であること */
   }
 
   .time-column {
@@ -864,6 +1359,10 @@ function getItemClass(item: CalendarItem): string {
   .time-header {
     height: 60px;
     border-bottom: 1px solid var(--calendar-grid-color, #e0e0e0);
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    background: var(--calendar-bg, #ffffff);
   }
 
   .time-slot {
@@ -877,14 +1376,150 @@ function getItemClass(item: CalendarItem): string {
     border-bottom: 1px solid var(--calendar-grid-color, #e0e0e0);
   }
 
-  .day-column {
-    flex: 1;
-    min-width: 120px;
+  /* clip-indicator 表示領域（開始時刻前・終了時刻後）の余白 */
+  .time-slot-minor-padding {
+    flex-shrink: 0;
+  }
+
+  /* allday レーンのスペーサー（time-column 内） */
+  .time-allday-spacer {
+    flex-shrink: 0;
+    box-sizing: border-box;
+    background: var(--calendar-bg, #ffffff);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .time-allday-label {
+    font-size: 9px;
+    color: #999;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    writing-mode: horizontal-tb;
+    user-select: none;
+  }
+
+  /* allday レーン（day-column 内） */
+  .day-allday {
+    position: relative;
+    overflow: visible;
+    box-sizing: border-box;
+    pointer-events: none; /* 子要素(allday-item)のみイベントを受ける */
+    flex-shrink: 0;
+  }
+
+  /* allday 縦罫線 */
+  .allday-border-right {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 0;
+  }
+
+  .allday-border-right.has-border {
     border-right: 1px solid var(--calendar-grid-color, #e0e0e0);
   }
 
-  .day-column:last-child {
-    border-right: none;
+  /* allday-canvas: dayIndex=0 の day-allday を起点に全曜日幅に広がるキャンバス */
+  .allday-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  /* allday バー */
+  .allday-item {
+    position: absolute;
+    height: 22px;
+    border-radius: 3px;
+    background-color: #ce93d8;
+    color: #333;
+    font-size: 11px;
+    font-weight: 500;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    pointer-events: auto;
+    box-sizing: border-box;
+    overflow: hidden;
+    z-index: 2; /* 縦罫線（allday-border-right）より前面に表示 */
+  }
+
+  .allday-item:hover {
+    opacity: 0.85;
+  }
+
+  .allday-bar-content {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0 6px;
+    pointer-events: none;
+  }
+
+  .allday-item.dragging {
+    opacity: 0.5;
+  }
+
+  .allday-item:hover {
+    opacity: 0.85;
+  }
+
+  /* allday リサイズハンドル（MonthView と同じスタイル） */
+  .allday-resize-handle {
+    position: absolute;
+    top: 0;
+    width: 8px;
+    height: 100%;
+    cursor: col-resize;
+    z-index: 10;
+    background-color: transparent;
+    transition: background-color 0.15s;
+    flex-shrink: 0;
+  }
+
+  .allday-resize-handle:hover {
+    background-color: rgba(0, 0, 0, 0.2);
+  }
+
+  .allday-resize-handle-left {
+    left: 0;
+    border-radius: 3px 0 0 3px;
+  }
+
+  .allday-resize-handle-right {
+    right: 0;
+    border-radius: 0 3px 3px 0;
+  }
+
+  /* allday ドロップグリッド */
+  .allday-drop-grid {
+    display: grid;
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .allday-drop-cell {
+    height: 100%;
+    pointer-events: auto;
+    box-sizing: border-box;
+  }
+
+  .allday-drop-cell.drag-over {
+    background-color: rgba(33, 150, 243, 0.1);
+  }
+
+  .day-column {
+    flex: 1;
+    min-width: 120px;
   }
 
   .day-header {
@@ -894,7 +1529,15 @@ function getItemClass(item: CalendarItem): string {
     align-items: center;
     justify-content: center;
     border-bottom: 1px solid var(--calendar-grid-color, #e0e0e0);
+    border-right: 1px solid var(--calendar-grid-color, #e0e0e0);
     background: #fafafa;
+    position: sticky;
+    top: 0;
+    z-index: 30;
+  }
+
+  .day-column:last-child .day-header {
+    border-right: none;
   }
 
   .weekday {
@@ -911,6 +1554,12 @@ function getItemClass(item: CalendarItem): string {
 
   .day-grid {
     position: relative;
+    transition: background-color 0.2s;
+    border-right: 1px solid var(--calendar-grid-color, #e0e0e0);
+  }
+
+  .day-column:last-child .day-grid {
+    border-right: none;
   }
 
   .grid-cell {
@@ -918,13 +1567,19 @@ function getItemClass(item: CalendarItem): string {
     border-bottom: 1px solid var(--calendar-grid-color, #e0e0e0);
   }
 
+  /* 常時 1 minorTick 分の余白（▼インジケーター表示領域） */
+  .grid-cell-minor-padding {
+    flex-shrink: 0;
+  }
+
   .items-container {
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
-    height: 100%;
+    bottom: 0; /* height:100% は包含ブロックが height:auto の場合に不定になるため bottom:0 を使用 */
     pointer-events: none;
+    z-index: 1; /* stacking context を形成し、内部の calendar-item の z-index を外部に漏らさない */
   }
 
   .calendar-item {
@@ -973,7 +1628,6 @@ function getItemClass(item: CalendarItem): string {
 
     background: var(--base);
     border-radius: 2px;
-    position: relative;
 
     /* ▼ 外側の高さ（浮き） */
     box-shadow:
@@ -1042,10 +1696,6 @@ function getItemClass(item: CalendarItem): string {
     cursor: move;
   }
 
-  .day-grid {
-    transition: background-color 0.2s;
-  }
-
   .day-grid:hover {
     background-color: rgba(33, 150, 243, 0.05);
   }
@@ -1081,6 +1731,45 @@ function getItemClass(item: CalendarItem): string {
     border-radius: 4px;
     pointer-events: none;
     z-index: var(--z-timeline);
+  }
+
+  /* ▲ 上端クリップインジケーター（アイテム外側・上に独立配置） */
+  .clip-indicator-above {
+    position: absolute;
+    pointer-events: auto;
+    user-select: none;
+    z-index: var(--z-cell-expanded);
+    font-size: 75%;
+    display: flex;
+    justify-content: center;
+    overflow: clip;
+    align-items: flex-end;
+    cursor: pointer;
+  }
+
+  /* ▼ 下端クリップインジケーター（アイテム外側・下に独立配置） */
+  .clip-indicator-below {
+    position: absolute;
+    pointer-events: auto;
+    user-select: none;
+    z-index: var(--z-cell-expanded);
+    font-size: 75%;
+    display: flex;
+    justify-content: center;
+    overflow: clip;
+    align-items: flex-start;
+    cursor: pointer;
+  }
+
+  /* クリップ時は上下の border-radius を除去 */
+  .calendar-item.clip-top {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+  }
+
+  .calendar-item.clip-bottom {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
   }
 
   /* リサイズハンドル */

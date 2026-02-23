@@ -290,6 +290,7 @@ function handleCellClick(dateTime: DateTime, clickPosition: { x: number; y: numb
     flex: 1;
     overflow: hidden;
     padding: 16px;
+    min-height: 0;
   }
 
   :global(:root) {
