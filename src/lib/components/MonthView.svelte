@@ -891,6 +891,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
             class="month-item single-day-item"
             class:multi-day-expanded={isMultiDayItem(item)}
             class:dragging={draggedItem === item}
+            title={item.title}
             draggable="true"
             ondragstart={(e) => handleSingleDayDragStart(e, item)}
             ondragend={handleDragEnd}
@@ -968,7 +969,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
                 class="allday-item"
                 class:dragging={draggedItem === item}
                 class:deadline-day={isDeadlineDay(item)}
-                title={isDeadlineDay(item) ? item.title : undefined}
+                title={item.title}
                 draggable="true"
                 ondragstart={(e) => handleDragStart(e, item, startIndex, week)}
                 ondragend={handleDragEnd}
@@ -1040,6 +1041,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
                     <div
                       class="month-item single-day-item"
                       class:dragging={draggedItem === item}
+                      title={item.title}
                       draggable="true"
                       ondragstart={(e) => handleSingleDayDragStart(e, item)}
                       ondragend={handleDragEnd}
