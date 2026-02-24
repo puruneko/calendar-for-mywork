@@ -1,6 +1,7 @@
 <script lang="ts">
 import { DateTime } from 'luxon';
 import type { CalendarItem } from '../models';
+import type { CalendarStorage } from '../storage';
 import WeekView from './WeekView.svelte';
 import MonthView from './MonthView.svelte';
 
@@ -10,30 +11,13 @@ type Props = {
   items?: CalendarItem[];
   currentDate?: DateTime;
   viewType?: ViewType;
-  // WeekView用設定
-  startHour?: number;
-  endHour?: number;
-  minorTick?: number;
-  showWeekend?: boolean;
-  showAllDay?: boolean;
-  defaultColorOpacity?: number;
-  weekStartsOn?: number;
-  itemRightMargin?: number;
-  showParent?: boolean;
-  parentDisplayIndex?: number;
-  // MonthView専用設定
-  monthMaxItemsPerDay?: number;
-  monthWeekStartsOn?: number;
-  monthShowWeekend?: boolean;
-  monthShowAllDay?: boolean;
-  monthShowSingleDay?: boolean;
+  /** CalendarStorage インスタンス。省略時はデフォルト設定で動作 */
+  storage?: CalendarStorage;
   onItemClick?: (item: CalendarItem) => void;
   onItemMove?: (item: CalendarItem, newStart: DateTime, newEnd: DateTime) => void;
   onItemResize?: (item: CalendarItem, newStart: DateTime, newEnd: DateTime) => void;
   onViewChange?: (date: DateTime) => void;
   onCellClick?: (dateTime: DateTime, clickPosition: { x: number; y: number }) => void;
-  onSettingsChange?: (settings: any) => void;
-  onMonthSettingsChange?: (settings: { maxItemsPerDay: number; weekStartsOn: number; showWeekend: boolean; showAllDay: boolean; showSingleDay: boolean; }) => void;
   onViewTypeChange?: (viewType: ViewType) => void;
   onDayClick?: (date: DateTime) => void;
 };
@@ -42,28 +26,12 @@ let {
   items = [],
   currentDate = DateTime.now(),
   viewType = $bindable('week'),
-  startHour = 8,
-  endHour = 20,
-  minorTick = 15,
-  showWeekend = true,
-  showAllDay = true,
-  defaultColorOpacity = 0.5,
-  weekStartsOn = 1,
-  itemRightMargin = 10,
-  showParent = true,
-  parentDisplayIndex = -1,
-  monthMaxItemsPerDay = 6,
-  monthWeekStartsOn = 1,
-  monthShowWeekend = true,
-  monthShowAllDay = true,
-  monthShowSingleDay = true,
+  storage,
   onItemClick,
   onItemMove,
   onItemResize,
   onViewChange,
   onCellClick,
-  onSettingsChange,
-  onMonthSettingsChange,
   onViewTypeChange,
   onDayClick,
 }: Props = $props();
@@ -79,7 +47,6 @@ function switchToMonth() {
 }
 
 function handleDayClick(date: DateTime) {
-  // 週表示に切り替えて、その日を表示
   viewType = 'week';
   onViewChange?.(date);
   onViewTypeChange?.('week');
@@ -90,13 +57,13 @@ function handleDayClick(date: DateTime) {
 <div class="calendar-view">
   <!-- ビュー切り替えボタン -->
   <div class="view-switcher">
-    <button 
+    <button
       class="view-button {viewType === 'week' ? 'active' : ''}"
       onclick={switchToWeek}
     >
       週表示
     </button>
-    <button 
+    <button
       class="view-button {viewType === 'month' ? 'active' : ''}"
       onclick={switchToMonth}
     >
@@ -109,39 +76,24 @@ function handleDayClick(date: DateTime) {
     <WeekView
       {items}
       {currentDate}
-      {startHour}
-      {endHour}
-      {minorTick}
-      {showWeekend}
-      {showAllDay}
-      {defaultColorOpacity}
-      {weekStartsOn}
-      {itemRightMargin}
-      {showParent}
-      {parentDisplayIndex}
+      {storage}
       {onItemClick}
       {onItemMove}
       {onItemResize}
       {onViewChange}
       {onCellClick}
-      {onSettingsChange}
     />
   {:else}
     <MonthView
       {items}
       {currentDate}
-      maxItemsPerDay={monthMaxItemsPerDay}
-      weekStartsOn={monthWeekStartsOn}
-      showWeekend={monthShowWeekend}
-      showAllDay={monthShowAllDay}
-      showSingleDay={monthShowSingleDay}
+      {storage}
       {onItemClick}
       {onItemMove}
       {onItemResize}
       {onViewChange}
       {onCellClick}
       onDayClick={handleDayClick}
-      onSettingsChange={onMonthSettingsChange}
     />
   {/if}
 </div>

@@ -2,59 +2,50 @@
 import { DateTime } from 'luxon';
 import { tick } from 'svelte';
 import type { CalendarItem } from '../models';
+import { CalendarStorage } from '../storage';
+import { DEFAULT_MONTH_SETTINGS } from '../models/settings';
 import { formatTime, getItemStart, getItemEnd, itemContainsDay, isTimed, isDeadlineDay, layoutWeekAllDay, type AllDayItem, formatDate } from '../utils';
 
 type Props = {
   items?: CalendarItem[];
   currentDate?: DateTime;
-  maxItemsPerDay?: number;
-  weekStartsOn?: number;
-  showWeekend?: boolean;
-  showAllDay?: boolean;
-  showSingleDay?: boolean;
+  storage?: CalendarStorage;
   onItemClick?: (item: CalendarItem) => void;
   onItemMove?: (item: CalendarItem, newStart: DateTime, newEnd: DateTime) => void;
   onItemResize?: (item: CalendarItem, newStart: DateTime, newEnd: DateTime) => void;
   onViewChange?: (date: DateTime) => void;
   onCellClick?: (dateTime: DateTime, clickPosition: { x: number; y: number }) => void;
   onDayClick?: (date: DateTime) => void;
-  onSettingsChange?: (settings: {
-    maxItemsPerDay: number;
-    weekStartsOn: number;
-    showWeekend: boolean;
-    showAllDay: boolean;
-    showSingleDay: boolean;
-  }) => void;
 };
 
 let {
   items = [],
   currentDate = DateTime.now(),
-  maxItemsPerDay = 6,
-  weekStartsOn = 1,
-  showWeekend = true,
-  showAllDay = true,
-  showSingleDay = true,
+  storage,
   onItemClick,
   onItemMove,
   onItemResize,
   onViewChange,
   onCellClick,
   onDayClick,
-  onSettingsChange,
 }: Props = $props();
+
+// 設定値を storage から取得（storage がない場合はデフォルト値を使用）
+let ms = $derived(storage?.data.monthSettings ?? DEFAULT_MONTH_SETTINGS);
+let maxItemsPerDay = $derived(ms.maxItemsPerDay);
+let weekStartsOn = $derived(ms.weekStartsOn);
+let showWeekend = $derived(ms.showWeekend);
+let showAllDay = $derived(ms.showAllDay);
+let showSingleDay = $derived(ms.showSingleDay);
 
 // 設定モーダルの表示状態
 let showSettings = $state(false);
 
 // 設定変更ハンドラ
-function handleSettingsChange(settings: {
-  maxItemsPerDay: number;
-  weekStartsOn: number;
-  showWeekend: boolean;
-  showAllDay: boolean;
-}) {
-  onSettingsChange?.(settings);
+function handleSettingsChange(patch: Partial<typeof DEFAULT_MONTH_SETTINGS>) {
+  if (storage) {
+    storage.update({ monthSettings: { ...ms, ...patch } });
+  }
 }
 
 // セル展開状態（展開されている日を保持）
@@ -817,7 +808,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
           <input id="mv-maxItems" type="number" value={maxItemsPerDay} min="1" max="20" step="1"
             onblur={(e) => {
               const v = parseInt((e.currentTarget as HTMLInputElement).value);
-              if (Number.isInteger(v) && v >= 1 && v <= 20) handleSettingsChange({ maxItemsPerDay: v, weekStartsOn, showWeekend, showAllDay, showSingleDay });
+              if (Number.isInteger(v) && v >= 1 && v <= 20) handleSettingsChange({ maxItemsPerDay: v });
               else (e.currentTarget as HTMLInputElement).value = String(maxItemsPerDay);
             }}
           />
@@ -827,7 +818,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
         <div class="setting-item">
           <label for="mv-weekStartsOn">週の開始曜日</label>
           <select id="mv-weekStartsOn" value={weekStartsOn}
-            onchange={(e) => handleSettingsChange({ maxItemsPerDay, weekStartsOn: parseInt((e.currentTarget as HTMLSelectElement).value), showWeekend, showAllDay, showSingleDay })}
+            onchange={(e) => handleSettingsChange({ weekStartsOn: parseInt((e.currentTarget as HTMLSelectElement).value) })}
           >
             <option value={1}>月曜日</option>
             <option value={2}>火曜日</option>
@@ -842,7 +833,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
         <div class="setting-item setting-item-inline">
           <label>
             <input type="checkbox" checked={showWeekend}
-              onchange={(e) => handleSettingsChange({ maxItemsPerDay, weekStartsOn, showWeekend: (e.currentTarget as HTMLInputElement).checked, showAllDay, showSingleDay })}
+              onchange={(e) => handleSettingsChange({ showWeekend: (e.currentTarget as HTMLInputElement).checked })}
             />
             土日を表示
           </label>
@@ -851,7 +842,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
         <div class="setting-item setting-item-inline">
           <label>
             <input type="checkbox" checked={showAllDay}
-              onchange={(e) => handleSettingsChange({ maxItemsPerDay, weekStartsOn, showWeekend, showAllDay: (e.currentTarget as HTMLInputElement).checked, showSingleDay })}
+              onchange={(e) => handleSettingsChange({ showAllDay: (e.currentTarget as HTMLInputElement).checked })}
             />
             終日タスクを表示
           </label>
@@ -860,7 +851,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
         <div class="setting-item setting-item-inline">
           <label>
             <input type="checkbox" checked={showSingleDay}
-              onchange={(e) => handleSettingsChange({ maxItemsPerDay, weekStartsOn, showWeekend, showAllDay, showSingleDay: (e.currentTarget as HTMLInputElement).checked })}
+              onchange={(e) => handleSettingsChange({ showSingleDay: (e.currentTarget as HTMLInputElement).checked })}
             />
             単日アイテムを表示
           </label>

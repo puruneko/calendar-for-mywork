@@ -10,14 +10,14 @@ test.describe('Calendar WeekView', () => {
   });
 
   test('カレンダーが正しく表示されること', async ({ page }) => {
-    // ヘッダーが表示されていること
-    await expect(page.locator('.app-header h1')).toContainText('Calendar Library Demo');
-    
     // カレンダーが表示されていること
     await expect(page.locator('.week-view')).toBeVisible();
     
     // 週のヘッダーが表示されていること
     await expect(page.locator('.week-header')).toBeVisible();
+    
+    // ビュー切り替えボタンが表示されていること
+    await expect(page.locator('.view-switcher')).toBeVisible();
   });
 
   test('ナビゲーションボタンが機能すること', async ({ page }) => {

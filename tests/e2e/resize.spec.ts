@@ -37,7 +37,8 @@ test.describe('リサイズ機能', () => {
     console.log('[REASON] ユーザーがアイテムの開始時刻を調整できる必要がある');
     console.log('[ASPECT] 最終的な表示時刻が期待値と一致するか');
     
-    const item = page.locator('.calendar-item').first();
+    // Deadline アイテム（.deadline-timed）は .item-time を持たないため除外
+    const item = page.locator('.calendar-item:not(.deadline-timed)').first();
     const initialTime = await item.locator('.item-time').textContent();
     console.log('Initial time:', initialTime);
     

@@ -4,6 +4,8 @@
 
 // === メインモデル ===
 export type { CalendarItem } from './CalendarItem';
+export type { WeekViewSettings, MonthViewSettings, CalendarStorageData } from './settings';
+export { DEFAULT_WEEK_SETTINGS, DEFAULT_MONTH_SETTINGS, DEFAULT_STORAGE_DATA } from './settings';
 export type { Task, TaskStatus } from './Task';
 export type { Appointment } from './Appointment';
 
