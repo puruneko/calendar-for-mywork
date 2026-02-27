@@ -16,6 +16,8 @@ type Props = {
   onViewChange?: (date: DateTime) => void;
   onCellClick?: (dateTime: DateTime, clickPosition: { x: number; y: number }) => void;
   onDayClick?: (date: DateTime) => void;
+  /** アイテムダブルクリック時のイベントハンドラ（編集ダイアログ起動用） */
+  onItemDblClick?: (item: CalendarItem) => void;
 };
 
 let {
@@ -28,6 +30,7 @@ let {
   onViewChange,
   onCellClick,
   onDayClick,
+  onItemDblClick,
 }: Props = $props();
 
 // 設定値を storage から取得（storage がない場合はデフォルト値を使用）
@@ -887,6 +890,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
             ondragstart={(e) => handleSingleDayDragStart(e, item)}
             ondragend={handleDragEnd}
             onclick={(e) => { e.stopPropagation(); onItemClick?.(item); }}
+            ondblclick={(e) => { e.stopPropagation(); onItemDblClick?.(item); }}
           >
             <span class="item-dot" style="background-color: {getItemBgColor(item)};"></span>
             <span class="item-time">{isTimed(item) && getItemStart(item) ? formatTime(getItemStart(item)!) : ''}</span>
@@ -965,6 +969,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
                 ondragstart={(e) => handleDragStart(e, item, startIndex, week)}
                 ondragend={handleDragEnd}
                 onclick={(e) => { e.stopPropagation(); onItemClick?.(item); }}
+                ondblclick={(e) => { e.stopPropagation(); onItemDblClick?.(item); }}
                 style={isDeadlineDay(item)
                   ? `--lane: ${lane}; --start-index: ${startIndex}; --span: ${span}; --is-deadline: 1; background-color: color-mix(in srgb, #ef4444 50%, transparent); border: 2px solid #ef4444; color: #7f1d1d; font-weight: 600; box-sizing: border-box;`
                   : `--lane: ${lane}; --start-index: ${startIndex}; --span: ${span}; background-color: ${getItemBgColor(item)};`}
@@ -1033,6 +1038,7 @@ function getMultiDayItemsForWeek(week: DateTime[]): Array<{item: CalendarItem, s
                       ondragstart={(e) => handleSingleDayDragStart(e, item)}
                       ondragend={handleDragEnd}
                       onclick={(e) => { e.stopPropagation(); onItemClick?.(item); }}
+                      ondblclick={(e) => { e.stopPropagation(); onItemDblClick?.(item); }}
                     >
                       <span class="item-dot" style="background-color: {getItemBgColor(item)};"></span>
                       <span class="item-time">{isTimed(item) && getItemStart(item) ? formatTime(getItemStart(item)!) : ''}</span>

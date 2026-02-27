@@ -127,6 +127,16 @@ function handleViewChange(date: DateTime) {
 function handleCellClick(dateTime: DateTime, _clickPosition: { x: number; y: number }) {
   console.log('Cell clicked:', dateTime.toISO());
 }
+
+function handleItemUpdate(updated: CalendarItem) {
+  console.log('Item updated:', updated.id);
+  items = items.map(i => i.id === updated.id ? updated : i);
+}
+
+function handleItemDelete(id: string) {
+  console.log('Item deleted:', id);
+  items = items.filter(i => i.id !== id);
+}
 </script>
 
 <div class="demo-app">
@@ -141,6 +151,8 @@ function handleCellClick(dateTime: DateTime, _clickPosition: { x: number; y: num
     onViewChange={handleViewChange}
     onCellClick={handleCellClick}
     onDayClick={handleViewChange}
+    onItemUpdate={handleItemUpdate}
+    onItemDelete={handleItemDelete}
   />
 </div>
 

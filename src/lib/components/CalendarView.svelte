@@ -4,6 +4,7 @@ import type { CalendarItem } from '../models';
 import type { CalendarStorage } from '../storage';
 import WeekView from './WeekView.svelte';
 import MonthView from './MonthView.svelte';
+import EventEditDialog from './EventEditDialog.svelte';
 
 type ViewType = 'week' | 'month';
 
@@ -20,6 +21,10 @@ type Props = {
   onCellClick?: (dateTime: DateTime, clickPosition: { x: number; y: number }) => void;
   onViewTypeChange?: (viewType: ViewType) => void;
   onDayClick?: (date: DateTime) => void;
+  /** アイテム更新コールバック（編集ダイアログで保存時に呼ばれる） */
+  onItemUpdate?: (item: CalendarItem) => void;
+  /** アイテム削除コールバック（編集ダイアログで削除時に呼ばれる） */
+  onItemDelete?: (id: string) => void;
 };
 
 let {
@@ -34,7 +39,30 @@ let {
   onCellClick,
   onViewTypeChange,
   onDayClick,
+  onItemUpdate,
+  onItemDelete,
 }: Props = $props();
+
+// ===== 編集ダイアログ状態 =====
+let editingItem = $state<CalendarItem | null>(null);
+
+function handleItemDblClick(item: CalendarItem) {
+  editingItem = item;
+}
+
+function handleDialogSave(updated: CalendarItem) {
+  onItemUpdate?.(updated);
+  editingItem = null;
+}
+
+function handleDialogDelete(id: string) {
+  onItemDelete?.(id);
+  editingItem = null;
+}
+
+function handleDialogClose() {
+  editingItem = null;
+}
 
 function switchToWeek() {
   viewType = 'week';
@@ -82,6 +110,7 @@ function handleDayClick(date: DateTime) {
       {onItemResize}
       {onViewChange}
       {onCellClick}
+      onItemDblClick={handleItemDblClick}
     />
   {:else}
     <MonthView
@@ -94,9 +123,20 @@ function handleDayClick(date: DateTime) {
       {onViewChange}
       {onCellClick}
       onDayClick={handleDayClick}
+      onItemDblClick={handleItemDblClick}
     />
   {/if}
 </div>
+
+<!-- 編集ダイアログ -->
+{#if editingItem}
+  <EventEditDialog
+    item={editingItem}
+    onSave={handleDialogSave}
+    onDelete={handleDialogDelete}
+    onClose={handleDialogClose}
+  />
+{/if}
 
 <style>
   .calendar-view {

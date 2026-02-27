@@ -39,6 +39,9 @@ interface Props {
 
   /** セルクリック時のイベントハンドラ */
   onCellClick?: (dateTime: DateTime, clickPosition: { x: number; y: number }) => void;
+
+  /** アイテムダブルクリック時のイベントハンドラ（編集ダイアログ起動用） */
+  onItemDblClick?: (item: CalendarItem) => void;
 }
 
 let {
@@ -50,6 +53,7 @@ let {
   onItemResize,
   onViewChange,
   onCellClick,
+  onItemDblClick,
 }: Props = $props();
 
 // ===== storage から設定値を取得（storage が未指定の場合はデフォルト値を使用）=====
@@ -1151,6 +1155,7 @@ function getItemClass(item: CalendarItem): string {
                     }}
                     title={p.item.title}
                     onclick={(e) => { e.stopPropagation(); onItemClick?.(p.item); }}
+                    ondblclick={(e) => { e.stopPropagation(); onItemDblClick?.(p.item); }}
                     role="button"
                     tabindex="0"
                   >
@@ -1250,6 +1255,7 @@ function getItemClass(item: CalendarItem): string {
                     class="item-content deadline-content"
                     title={item.temporal.kind === 'CalendarDateTimePoint' ? `${item.title} (${formatTime(item.temporal.at)})` : item.title}
                     onclick={(e) => { e.stopPropagation(); handleItemClick(item); }}
+                    ondblclick={(e) => { e.stopPropagation(); onItemDblClick?.(item); }}
                     onkeydown={(e) => e.key === 'Enter' && handleItemClick(item)}
                     role="button"
                     tabindex="0"
@@ -1283,6 +1289,7 @@ function getItemClass(item: CalendarItem): string {
                     class="item-content"
                     title={item.temporal.kind === 'CalendarDateTimeRange' ? `${item.title} (${formatTime(item.temporal.start)} - ${formatTime(item.temporal.end)})` : item.title}
                     onclick={(e) => { e.stopPropagation(); handleItemClick(item); }}
+                    ondblclick={(e) => { e.stopPropagation(); onItemDblClick?.(item); }}
                     onkeydown={(e) => e.key === 'Enter' && handleItemClick(item)}
                     role="button"
                     tabindex="0"
