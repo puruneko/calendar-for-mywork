@@ -7,7 +7,7 @@
  * - Svelte のリアクティビティと連携するため $state を内部で使用
  */
 
-import type { CalendarStorageData, WeekViewSettings, MonthViewSettings } from '../models/settings';
+import type { CalendarStorageData, WeekViewSettings, MonthViewSettings, BusinessHours } from '../models/settings';
 import { DEFAULT_STORAGE_DATA } from '../models/settings';
 
 /** 深い部分更新用のユーティリティ型 */
@@ -81,6 +81,11 @@ export class CalendarStorage {
   /** MonthViewSettings を取得 */
   get monthSettings(): MonthViewSettings {
     return this.#data.monthSettings;
+  }
+
+  /** BusinessHours を取得 */
+  get businessHours(): BusinessHours {
+    return this.#data.businessHours;
   }
 
   /**

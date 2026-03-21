@@ -9,7 +9,8 @@
 import { DateTime } from 'luxon';
 import type { CalendarItem } from '../models';
 import { CalendarStorage } from '../storage';
-import { DEFAULT_WEEK_SETTINGS } from '../models/settings';
+import { DEFAULT_WEEK_SETTINGS, DEFAULT_BUSINESS_HOURS } from '../models/settings';
+import type { WeekDayKey } from '../models/settings';
 import { getWeekDays, formatTime, formatWeekday, formatDate, generateTimeSlots, snapToMinorTick, getItemStart, getItemEnd, itemContainsDay, isTimed, isAllDay, isDeadlineTimed, isDeadlineDay, layoutWeekAllDay, type AllDayItem } from '../utils';
 
 // Z-index層管理は CSS変数で集中管理（demo/App.svelte の :global(:root) に定義）
@@ -71,6 +72,56 @@ let itemRightMargin = $derived(ws.itemRightMargin);
 let showParent = $derived(ws.showParent);
 let parentDisplayIndex = $derived(ws.parentDisplayIndex);
 const tickInterval = 60; // 後方互換性のため残す（内部用）
+
+// ===== ビジネスアワー設定 =====
+let businessHours = $derived(storage?.businessHours ?? DEFAULT_BUSINESS_HOURS);
+
+/** Luxon weekday (1=Mon...7=Sun) → WeekDayKey */
+const WEEKDAY_KEY_MAP: WeekDayKey[] = [
+  'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+];
+
+/** ビジネスアワー設定を部分更新する */
+function handleBusinessHoursChange(patch: Partial<typeof DEFAULT_BUSINESS_HOURS>) {
+  if (storage) {
+    storage.update({ businessHours: { ...businessHours, ...patch } });
+  }
+}
+
+/** "HH:MM" 文字列を分数に変換する */
+function timeToMinutes(t: string): number {
+  const [h, m] = t.split(':').map(Number);
+  return (h ?? 0) * 60 + (m ?? 0);
+}
+
+/**
+ * 指定曜日の営業時間外オーバーレイ情報を返す。
+ * 返り値は { preHeight, postTop, postHeight } で、すべて px 単位。
+ * preHeight=0 / postHeight=0 の場合はそのオーバーレイは不要。
+ */
+function getBusinessHoursOverlay(day: import('luxon').DateTime): {
+  preHeight: number;
+  postTop: number;
+  postHeight: number;
+  showFullOverlay: boolean;
+} {
+  const key = WEEKDAY_KEY_MAP[day.weekday - 1];
+  const daySettings = businessHours.weekDays[key];
+  const totalMinutes = (endHour - startHour) * 60;
+
+  if (!businessHours.enabled || !daySettings.enabled) {
+    return { preHeight: 0, postTop: 0, postHeight: 0, showFullOverlay: true };
+  }
+
+  const bhStart = timeToMinutes(daySettings.startTime) - startHour * 60;
+  const bhEnd   = timeToMinutes(daySettings.endTime)   - startHour * 60;
+
+  const preHeight  = Math.max(0, Math.min(bhStart, totalMinutes));
+  const clampedEnd = Math.max(0, Math.min(bhEnd, totalMinutes));
+  const postHeight = totalMinutes - clampedEnd;
+
+  return { preHeight, postTop: clampedEnd, postHeight, showFullOverlay: false };
+}
 
 // 週の日付リストを取得（土日表示の設定を反映）
 let weekDays = $derived.by(() => {
@@ -1055,6 +1106,45 @@ function getItemClass(item: CalendarItem): string {
           />
           <span class="hint">-1で最後の親を表示</span>
         </div>
+        <!-- 営業時間設定セクション -->
+        <div class="setting-section-header">営業時間</div>
+        <div class="setting-item setting-item-inline">
+          <label>
+            <input type="checkbox" checked={businessHours.enabled}
+              onchange={(e) => handleBusinessHoursChange({ enabled: (e.currentTarget as HTMLInputElement).checked })}
+            />
+            営業時間を表示する
+          </label>
+        </div>
+        {#if businessHours.enabled}
+          {#each (['monday','tuesday','wednesday','thursday','friday','saturday','sunday'] as WeekDayKey[]) as key}
+            {@const daySettings = businessHours.weekDays[key]}
+            {@const label = { monday:'月曜日', tuesday:'火曜日', wednesday:'水曜日', thursday:'木曜日', friday:'金曜日', saturday:'土曜日', sunday:'日曜日' }[key]}
+            <div class="setting-item setting-item-bh-row">
+              <label class="bh-day-label">
+                <input type="checkbox" checked={daySettings.enabled}
+                  onchange={(e) => {
+                    if (storage) storage.update({ businessHours: { ...businessHours, weekDays: { ...businessHours.weekDays, [key]: { ...daySettings, enabled: (e.currentTarget as HTMLInputElement).checked } } } });
+                  }}
+                />
+                {label}
+              </label>
+              {#if daySettings.enabled}
+                <input type="time" class="bh-time-input" value={daySettings.startTime}
+                  onchange={(e) => {
+                    if (storage) storage.update({ businessHours: { ...businessHours, weekDays: { ...businessHours.weekDays, [key]: { ...daySettings, startTime: (e.currentTarget as HTMLInputElement).value } } } });
+                  }}
+                />
+                <span class="bh-sep">〜</span>
+                <input type="time" class="bh-time-input" value={daySettings.endTime}
+                  onchange={(e) => {
+                    if (storage) storage.update({ businessHours: { ...businessHours, weekDays: { ...businessHours.weekDays, [key]: { ...daySettings, endTime: (e.currentTarget as HTMLInputElement).value } } } });
+                  }}
+                />
+              {/if}
+            </div>
+          {/each}
+        {/if}
       </div>
     </div>
   {/if}
@@ -1229,6 +1319,26 @@ function getItemClass(item: CalendarItem): string {
               class="current-time-line" 
               style="top: {currentTimeLine.position + minorTick}px; background-color: rgba(244, 67, 54, {opacity});"
             ></div>
+          {/if}
+
+          <!-- ビジネスアワーオーバーレイ -->
+          {#if businessHours.enabled}
+            {@const bho = getBusinessHoursOverlay(day)}
+            {#if bho.showFullOverlay}
+              <div class="bh-overlay" style="top: {minorTick}px; height: {(endHour - startHour) * 60}px;"></div>
+            {:else}
+              {#if bho.preHeight > 0}
+                <div class="bh-overlay" style="top: {minorTick}px; height: {bho.preHeight}px;"></div>
+              {/if}
+              {#if bho.preHeight < (endHour - startHour) * 60 && bho.postHeight === 0}
+                <div class="bh-active-border" style="top: {minorTick + bho.preHeight}px; height: {(endHour - startHour) * 60 - bho.preHeight}px;"></div>
+              {:else if bho.preHeight < (endHour - startHour) * 60}
+                <div class="bh-active-border" style="top: {minorTick + bho.preHeight}px; height: {bho.postTop - bho.preHeight}px;"></div>
+              {/if}
+              {#if bho.postHeight > 0}
+                <div class="bh-overlay" style="top: {minorTick + bho.postTop}px; height: {bho.postHeight}px;"></div>
+              {/if}
+            {/if}
           {/if}
 
           <!-- ドラッグプレビュー（移動先の影） -->
@@ -1438,6 +1548,48 @@ function getItemClass(item: CalendarItem): string {
   .setting-item-inline {
     justify-content: flex-end;
     padding-bottom: 4px;
+  }
+
+  .setting-section-header {
+    font-size: 11px;
+    font-weight: 700;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 8px;
+    padding: 6px 0 4px;
+    border-top: 1px solid #e8e8e8;
+  }
+
+  .setting-item-bh-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 0;
+    font-size: 11px;
+  }
+
+  .bh-day-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 68px;
+    font-size: 11px;
+    color: #666;
+    font-weight: 500;
+  }
+
+  .bh-time-input {
+    font-size: 11px;
+    padding: 2px 4px;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    width: 74px;
+  }
+
+  .bh-sep {
+    font-size: 11px;
+    color: #999;
   }
 
   .setting-item label {
@@ -1792,6 +1944,26 @@ function getItemClass(item: CalendarItem): string {
     bottom: 0; /* height:100% は包含ブロックが height:auto の場合に不定になるため bottom:0 を使用 */
     pointer-events: none;
     z-index: 1; /* stacking context を形成し、内部の calendar-item の z-index を外部に漏らさない */
+  }
+
+  /* ビジネスアワーオーバーレイ */
+  .bh-overlay {
+    position: absolute;
+    left: 0;
+    right: 0;
+    background: rgba(0, 0, 0, 0.04);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* 営業時間帯の左ボーダー */
+  .bh-active-border {
+    position: absolute;
+    left: 0;
+    right: 0;
+    border-left: 2px solid #4285f4;
+    pointer-events: none;
+    z-index: 0;
   }
 
   .calendar-item {

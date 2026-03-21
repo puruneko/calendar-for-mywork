@@ -45,10 +45,35 @@ export type MonthViewSettings = {
   showSingleDay: boolean;
 };
 
+// ============================================================
+// BusinessHours
+// ============================================================
+
+/** 曜日キー（Luxon の weekday 順: 1=Monday...7=Sunday） */
+export type WeekDayKey = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+
+/** 各曜日の営業時間設定 */
+export type BusinessDaySettings = {
+  /** この曜日を営業日として扱うか */
+  enabled: boolean;
+  /** 営業開始時刻（"HH:MM" 形式） */
+  startTime: string;
+  /** 営業終了時刻（"HH:MM" 形式） */
+  endTime: string;
+};
+
+/** ビジネスアワー全体設定 */
+export type BusinessHours = {
+  /** 機能全体の有効/無効スイッチ */
+  enabled: boolean;
+  weekDays: Record<WeekDayKey, BusinessDaySettings>;
+};
+
 /** CalendarStorage で永続化される全設定値 */
 export type CalendarStorageData = {
   weekSettings: WeekViewSettings;
   monthSettings: MonthViewSettings;
+  businessHours: BusinessHours;
 };
 
 /** WeekViewSettings のデフォルト値 */
@@ -76,8 +101,26 @@ export const DEFAULT_MONTH_SETTINGS: MonthViewSettings = {
   showSingleDay: true,
 };
 
+const DEFAULT_BUSINESS_DAY: BusinessDaySettings = { enabled: true,  startTime: '09:00', endTime: '17:30' };
+const DEFAULT_OFF_DAY: BusinessDaySettings      = { enabled: false, startTime: '00:00', endTime: '00:00' };
+
+/** BusinessHours のデフォルト値（月〜金: 09:00〜17:30、土日: 休み） */
+export const DEFAULT_BUSINESS_HOURS: BusinessHours = {
+  enabled: true,
+  weekDays: {
+    monday:    { ...DEFAULT_BUSINESS_DAY },
+    tuesday:   { ...DEFAULT_BUSINESS_DAY },
+    wednesday: { ...DEFAULT_BUSINESS_DAY },
+    thursday:  { ...DEFAULT_BUSINESS_DAY },
+    friday:    { ...DEFAULT_BUSINESS_DAY },
+    saturday:  { ...DEFAULT_OFF_DAY },
+    sunday:    { ...DEFAULT_OFF_DAY },
+  },
+};
+
 /** CalendarStorageData のデフォルト値 */
 export const DEFAULT_STORAGE_DATA: CalendarStorageData = {
   weekSettings: DEFAULT_WEEK_SETTINGS,
   monthSettings: DEFAULT_MONTH_SETTINGS,
+  businessHours: DEFAULT_BUSINESS_HOURS,
 };
