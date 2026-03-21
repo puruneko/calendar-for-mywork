@@ -11,7 +11,7 @@ import type { CalendarItem } from '../models';
 import { CalendarStorage } from '../storage';
 import { DEFAULT_WEEK_SETTINGS, DEFAULT_BUSINESS_HOURS } from '../models/settings';
 import type { WeekDayKey } from '../models/settings';
-import { getWeekDays, formatTime, formatWeekday, formatDate, generateTimeSlots, snapToMinorTick, getItemStart, getItemEnd, itemContainsDay, isTimed, isAllDay, isDeadlineTimed, isDeadlineDay, layoutWeekAllDay, type AllDayItem } from '../utils';
+import { getWeekDays, formatTime, formatWeekday, formatDate, generateTimeSlots, snapToMinorTick, getItemStart, getItemEnd, itemContainsDay, isTimed, isAllDay, isDeadlineTimed, isDeadlineDay, layoutWeekAllDay, type AllDayItem, getComputedItemStyle } from '../utils';
 
 // Z-index層管理は CSS変数で集中管理（demo/App.svelte の :global(:root) に定義）
 // このコメントは削除せず、開発者への注意喚起として残す
@@ -43,6 +43,9 @@ interface Props {
 
   /** アイテムダブルクリック時のイベントハンドラ（編集ダイアログ起動用） */
   onItemDblClick?: (item: CalendarItem) => void;
+
+  /** タグ → スタイルのマップ（タグベーススタイル自動適用） */
+  tagStyleMap?: Record<string, Partial<CSSStyleDeclaration>>;
 }
 
 let {
@@ -55,6 +58,7 @@ let {
   onViewChange,
   onCellClick,
   onItemDblClick,
+  tagStyleMap,
 }: Props = $props();
 
 // ===== storage から設定値を取得（storage が未指定の場合はデフォルト値を使用）=====
@@ -419,7 +423,7 @@ let weekLayout = $derived.by((): Map<number, PositionedItem[]> => {
   return result;
 });
 
-/** top/height/left/width + カスタムスタイルを結合して style 文字列を生成 */
+/** top/height/left/width + 計算済みスタイルを結合して style 文字列を生成 */
 function buildStyleStr(
   item: CalendarItem,
   top: number,
@@ -429,38 +433,29 @@ function buildStyleStr(
 ): string {
   let str = `top: ${top}px; height: ${height}px; left: ${left}%; width: ${width}%;`;
 
-  if (item.style) {
-    const customParts: string[] = [];
-    for (const [key, value] of Object.entries(item.style)) {
-      if (value === undefined || value === null || value === '') continue;
-      const cssKey = key.replace(/([A-Z])/g, '-$1').toLowerCase();
-      if ((cssKey === 'color' || cssKey === 'background-color' || cssKey === 'background') && typeof value === 'string') {
-        const v = applyDefaultOpacity(value, defaultColorOpacity);
-        if (v) customParts.push(`${cssKey}: ${v}`);
-      } else {
-        customParts.push(`${cssKey}: ${value}`);
-      }
+  const computed = getComputedItemStyle(item, tagStyleMap);
+  const customParts: string[] = [];
+  for (const [key, value] of Object.entries(computed)) {
+    if (value === undefined || value === null || value === '') continue;
+    const cssKey = key.replace(/([A-Z])/g, '-$1').toLowerCase();
+    if ((cssKey === 'color' || cssKey === 'background-color' || cssKey === 'background') && typeof value === 'string') {
+      const v = applyDefaultOpacity(value, defaultColorOpacity);
+      if (v) customParts.push(`${cssKey}: ${v}`);
+    } else {
+      customParts.push(`${cssKey}: ${value}`);
     }
-    if (customParts.length > 0) {
-      str += ' ' + customParts.join('; ') + ';';
-    }
+  }
+  if (customParts.length > 0) {
+    str += ' ' + customParts.join('; ') + ';';
   }
 
   return str;
 }
 
-// allday アイテムの背景色を取得（MonthView と同じロジック）
+// allday アイテムの背景色を取得
 function getItemBgColor(item: CalendarItem): string {
-  if (item.style?.backgroundColor && typeof item.style.backgroundColor === 'string') {
-    return item.style.backgroundColor;
-  }
-  if (item.type === 'task') {
-    const task = item as any;
-    if (task.status === 'todo') return '#90caf9';
-    if (task.status === 'doing') return '#ffb74d';
-    if (task.status === 'done') return '#a5d6a7';
-  }
-  return '#ce93d8';
+  const computed = getComputedItemStyle(item, tagStyleMap);
+  return computed.backgroundColor ?? '#ce93d8';
 }
 
 // allday DnD 状態

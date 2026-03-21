@@ -4,7 +4,7 @@ import { tick } from 'svelte';
 import type { CalendarItem } from '../models';
 import { CalendarStorage } from '../storage';
 import { DEFAULT_MONTH_SETTINGS } from '../models/settings';
-import { formatTime, getItemStart, getItemEnd, itemContainsDay, isTimed, isDeadlineDay, layoutWeekAllDay, type AllDayItem, formatDate } from '../utils';
+import { formatTime, getItemStart, getItemEnd, itemContainsDay, isTimed, isDeadlineDay, layoutWeekAllDay, type AllDayItem, formatDate, getComputedItemStyle } from '../utils';
 
 type Props = {
   items?: CalendarItem[];
@@ -18,6 +18,8 @@ type Props = {
   onDayClick?: (date: DateTime) => void;
   /** アイテムダブルクリック時のイベントハンドラ（編集ダイアログ起動用） */
   onItemDblClick?: (item: CalendarItem) => void;
+  /** タグ → スタイルのマップ（タグベーススタイル自動適用） */
+  tagStyleMap?: Record<string, Partial<CSSStyleDeclaration>>;
 };
 
 let {
@@ -31,6 +33,7 @@ let {
   onCellClick,
   onDayClick,
   onItemDblClick,
+  tagStyleMap,
 }: Props = $props();
 
 // 設定値を storage から取得（storage がない場合はデフォルト値を使用）
@@ -202,16 +205,8 @@ function getItemsForDay(day: DateTime): CalendarItem[] {
 
 // アイテムの背景色を取得
 function getItemBgColor(item: CalendarItem): string {
-  if (item.style?.backgroundColor && typeof item.style.backgroundColor === 'string') {
-    return item.style.backgroundColor;
-  }
-  if (item.type === 'task') {
-    const task = item as any;
-    if (task.status === 'todo') return '#90caf9';
-    if (task.status === 'doing') return '#ffb74d';
-    if (task.status === 'done') return '#a5d6a7';
-  }
-  return '#ce93d8';
+  const computed = getComputedItemStyle(item, tagStyleMap);
+  return computed.backgroundColor ?? '#ce93d8';
 }
 
 // 前月・次月への移動

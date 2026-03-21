@@ -25,6 +25,8 @@ type Props = {
   onItemUpdate?: (item: CalendarItem) => void;
   /** アイテム削除コールバック（編集ダイアログで削除時に呼ばれる） */
   onItemDelete?: (id: string) => void;
+  /** タグ → スタイルのマップ（タグベーススタイル自動適用） */
+  tagStyleMap?: Record<string, Partial<CSSStyleDeclaration>>;
 };
 
 let {
@@ -41,6 +43,7 @@ let {
   onDayClick,
   onItemUpdate,
   onItemDelete,
+  tagStyleMap,
 }: Props = $props();
 
 // ===== 編集ダイアログ状態 =====
@@ -110,6 +113,7 @@ function handleDayClick(date: DateTime) {
       {onItemResize}
       {onViewChange}
       {onCellClick}
+      {tagStyleMap}
       onItemDblClick={handleItemDblClick}
     />
   {:else}
@@ -122,6 +126,7 @@ function handleDayClick(date: DateTime) {
       {onItemResize}
       {onViewChange}
       {onCellClick}
+      {tagStyleMap}
       onDayClick={handleDayClick}
       onItemDblClick={handleItemDblClick}
     />

@@ -5,6 +5,7 @@
 
 import { DateTime } from 'luxon';
 import type { CalendarItem } from '../models/CalendarItem';
+import type { Task } from '../models/Task';
 import { getSpanStart, getSpanEnd } from '../models/temporal';
 
 /**
@@ -91,4 +92,82 @@ export function itemsOverlap(item1: CalendarItem, item2: CalendarItem, zone: str
   const start2 = getItemStart(item2, zone);
   const end2 = getItemEnd(item2, zone);
   return start1 < end2 && start2 < end1;
+}
+
+// ============================================================
+// タグベーススタイル自動適用
+// ============================================================
+
+/** タイプ別デフォルトカラープリセット */
+export const METRO_COLOR_PRESETS = {
+  task:        { todo: '#5B9CF6', doing: '#FFA94D', done: '#A8C5A0', undefined: '#5B9CF6' },
+  appointment: '#6EBD8F',
+  deadline:    '#F07070',
+} as const;
+
+type StyleRule = {
+  id: string;
+  apply: (item: CalendarItem, now: DateTime) => Partial<CSSStyleDeclaration> | null;
+};
+
+/** プリセットスタイルルール（期限超過・完了タスク） */
+export const PRESET_STYLE_RULES: StyleRule[] = [
+  {
+    id: 'overdue-task',
+    apply: (item, now) => {
+      if (item.type !== 'task' || (item as Task).status === 'done') return null;
+      if (getSpanEnd(item.temporal) >= now) return null;
+      return { borderLeft: '3px solid #E53E3E' };
+    },
+  },
+  {
+    id: 'completed-task',
+    apply: (item) => {
+      if (item.type !== 'task' || (item as Task).status !== 'done') return null;
+      return { backgroundColor: '#cccccc', opacity: '0.6' };
+    },
+  },
+];
+
+/**
+ * アイテムの最終スタイルを計算する（優先度: 型デフォルト → タグ → ルール → 手動）
+ *
+ * @param item - カレンダーアイテム
+ * @param tagStyleMap - タグ名 → スタイルのマップ
+ * @param now - 現在日時（テスト用に注入可能）
+ */
+export function getComputedItemStyle(
+  item: CalendarItem,
+  tagStyleMap?: Record<string, Partial<CSSStyleDeclaration>>,
+  now: DateTime = DateTime.now(),
+): Partial<CSSStyleDeclaration> {
+  // 1. 型デフォルト（status 別含む）
+  let result: Partial<CSSStyleDeclaration> = {};
+  if (item.type === 'task') {
+    const status = (item as Task).status ?? 'undefined';
+    result.backgroundColor = METRO_COLOR_PRESETS.task[status as keyof typeof METRO_COLOR_PRESETS.task]
+      ?? METRO_COLOR_PRESETS.task.todo;
+  } else if (item.type === 'appointment') {
+    result.backgroundColor = METRO_COLOR_PRESETS.appointment;
+  } else {
+    result.backgroundColor = METRO_COLOR_PRESETS.deadline;
+  }
+
+  // 2. タグスタイル（複数タグはマージ、後のタグが優先）
+  if (tagStyleMap && item.tags) {
+    for (const tag of item.tags) {
+      if (tagStyleMap[tag]) result = { ...result, ...tagStyleMap[tag] };
+    }
+  }
+
+  // 3. ルールベース
+  for (const rule of PRESET_STYLE_RULES) {
+    const ruleStyle = rule.apply(item, now);
+    if (ruleStyle) result = { ...result, ...ruleStyle };
+  }
+
+  // 4. 手動指定（最優先）
+  if (item.style) result = { ...result, ...item.style };
+
+  return result;
 }

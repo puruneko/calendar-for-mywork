@@ -26,10 +26,10 @@ const d = (offset: number) => today.plus({ days: offset });
 // サンプルデータ
 let items = $state<CalendarItem[]>([
   // ===== 今日 =====
-  createCalendarItem({ type: 'task', id: '1', title: 'プロジェクト企画書作成', start: d(0).set({ hour: 9 }), end: d(0).set({ hour: 12 }), status: 'doing', parents: ['新規事業プロジェクト', '企画フェーズ'] }),
+  createCalendarItem({ type: 'task', id: '1', title: 'プロジェクト企画書作成', start: d(0).set({ hour: 9 }), end: d(0).set({ hour: 12 }), status: 'doing', parents: ['新規事業プロジェクト', '企画フェーズ'], tags: ['重要'] }),
   createCalendarItem({ type: 'task', id: '2', title: 'コードレビュー', start: d(0).set({ hour: 10 }), end: d(0).set({ hour: 11 }), status: 'todo', parents: ['機能開発Sprint#5', 'QA'] }),
   createCalendarItem({ type: 'appointment', id: '3', title: 'チームミーティング', start: d(0).set({ hour: 11 }), end: d(0).set({ hour: 12 }), parents: ['週次定例'] }),
-  createCalendarItem({ type: 'task', id: '4', title: '要件定義書レビュー', start: d(0).set({ hour: 13 }), end: d(0).set({ hour: 14 }), status: 'doing', parents: ['A社案件', '要件定義フェーズ'] }),
+  createCalendarItem({ type: 'task', id: '4', title: '要件定義書レビュー', start: d(0).set({ hour: 13 }), end: d(0).set({ hour: 14 }), status: 'doing', parents: ['A社案件', '要件定義フェーズ'], tags: ['重要'] }),
   createCalendarItem({ type: 'task', id: '5', title: 'バグ修正#1234', start: d(0).set({ hour: 14 }), end: d(0).set({ hour: 15 }), status: 'doing', parents: ['機能開発Sprint#5'] }),
   createCalendarItem({ type: 'appointment', id: '6', title: '部署会議', start: d(0).set({ hour: 15 }), end: d(0).set({ hour: 16 }) }),
   createCalendarItem({ type: 'task', id: '7', title: '週報作成', start: d(0).set({ hour: 16 }), end: d(0).set({ hour: 16, minute: 30 }), status: 'todo' }),
@@ -78,6 +78,11 @@ let items = $state<CalendarItem[]>([
 
 let currentDate = $state(DateTime.now());
 let viewType = $state<'week' | 'month'>('week');
+
+// タグ → スタイルのマップ（タグベーススタイル自動適用のデモ）
+const tagStyleMap: Record<string, Partial<CSSStyleDeclaration>> = {
+  '重要': { backgroundColor: '#ea4335', color: '#fff', fontWeight: 'bold' },
+};
 
 // バリデーション（開発時のみ）
 validateCalendarItems(items);
@@ -153,6 +158,7 @@ function handleItemDelete(id: string) {
     onDayClick={handleViewChange}
     onItemUpdate={handleItemUpdate}
     onItemDelete={handleItemDelete}
+    {tagStyleMap}
   />
 </div>
 
