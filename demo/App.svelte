@@ -8,9 +8,8 @@ import { CalendarView } from '../src/lib/components';
 import { CalendarStorage, LocalStorageBackend } from '../src/lib/storage';
 import type { CalendarItem } from '../src/lib/models';
 import {
-  toISODate, createCalendarDateRange, validateCalendarItems, diffDays,
+  toISODate, validateCalendarItems,
   createCalendarItem,
-  updateTimedItem, updateAllDayItem, updatePointItem,
 } from '../src/lib/models';
 
 // CalendarStorage を作成（LocalStorageBackend で永続化）
@@ -76,7 +75,6 @@ let items = $state<CalendarItem[]>([
   createCalendarItem({ type: 'task', id: 'f9', title: 'API設計書作成', start: d(8).set({ hour: 9 }), end: d(8).set({ hour: 12 }), status: 'todo', parents: ['B社案件'] }),
 ]);
 
-let currentDate = $state(DateTime.now());
 let viewType = $state<'week' | 'month'>('week');
 
 // タグ → スタイルのマップ（タグベーススタイル自動適用のデモ）
@@ -87,78 +85,31 @@ const tagStyleMap: Record<string, Partial<CSSStyleDeclaration>> = {
 // バリデーション（開発時のみ）
 validateCalendarItems(items);
 
+// ===== オプションフック（ログ出力デモ） =====
+// ミューテーションは CalendarView が既定処理として担当するため、ここではログのみ
+
 function handleItemClick(item: CalendarItem) {
   console.log('Item clicked:', item);
 }
 
 function handleItemMove(item: CalendarItem, newStart: DateTime, newEnd: DateTime) {
   console.debug('Item moved:', item.id, newStart.toISO(), newEnd.toISO());
-  items = items.map(i => {
-    if (i.id !== item.id) return i;
-    if (i.temporal.kind === 'CalendarDateRange') {
-      const span = diffDays(i.temporal);
-      const newStartDate = toISODate(newStart.startOf('day'));
-      const newEndDate = toISODate(newStart.startOf('day').plus({ days: span }));
-      return updateAllDayItem(i, { start: newStartDate, endExclusive: newEndDate });
-    }
-    if (i.temporal.kind === 'CalendarDatePoint') {
-      return updatePointItem(i, toISODate(newStart.startOf('day')));
-    }
-    if (i.temporal.kind === 'CalendarDateTimePoint') {
-      return updatePointItem(i, newStart);
-    }
-    return updateTimedItem(i, newStart, newEnd);
-  });
-}
-
-function handleItemResize(item: CalendarItem, newStart: DateTime, newEnd: DateTime) {
-  console.debug('Item resized:', item.id, newStart.toISO(), newEnd.toISO());
-  items = items.map(i => {
-    if (i.id !== item.id) return i;
-    if (i.temporal.kind === 'CalendarDateRange') {
-      return updateAllDayItem(i, {
-        start: toISODate(newStart.startOf('day')),
-        endExclusive: toISODate(newEnd.startOf('day')),
-      });
-    }
-    return updateTimedItem(i, newStart, newEnd);
-  });
-}
-
-function handleViewChange(date: DateTime) {
-  currentDate = date;
 }
 
 function handleCellClick(dateTime: DateTime, _clickPosition: { x: number; y: number }) {
   console.log('Cell clicked:', dateTime.toISO());
-}
-
-function handleItemUpdate(updated: CalendarItem) {
-  console.log('Item updated:', updated.id);
-  items = items.map(i => i.id === updated.id ? updated : i);
-}
-
-function handleItemDelete(id: string) {
-  console.log('Item deleted:', id);
-  items = items.filter(i => i.id !== id);
 }
 </script>
 
 <div class="demo-app">
   <CalendarView
     {items}
-    {currentDate}
     bind:viewType
     {storage}
+    {tagStyleMap}
     onItemClick={handleItemClick}
     onItemMove={handleItemMove}
-    onItemResize={handleItemResize}
-    onViewChange={handleViewChange}
     onCellClick={handleCellClick}
-    onDayClick={handleViewChange}
-    onItemUpdate={handleItemUpdate}
-    onItemDelete={handleItemDelete}
-    {tagStyleMap}
   />
 </div>
 

@@ -5,6 +5,10 @@ import type { CalendarStorage } from '../storage';
 import WeekView from './WeekView.svelte';
 import MonthView from './MonthView.svelte';
 import EventEditDialog from './EventEditDialog.svelte';
+import {
+  toISODate, diffDays,
+  updateTimedItem, updateAllDayItem, updatePointItem,
+} from '../models';
 
 type ViewType = 'week' | 'month';
 
@@ -31,7 +35,7 @@ type Props = {
 
 let {
   items = [],
-  currentDate = DateTime.now(),
+  currentDate,
   viewType = $bindable('week'),
   storage,
   onItemClick,
@@ -46,6 +50,74 @@ let {
   tagStyleMap,
 }: Props = $props();
 
+// ===== 内部状態 =====
+let internalItems = $state<CalendarItem[]>([...items]);
+let internalCurrentDate = $state<DateTime>(currentDate ?? DateTime.now());
+
+// 外部 items prop が変化したら同期
+$effect(() => {
+  internalItems = [...items];
+});
+
+// 外部 currentDate prop が提供・変化したら同期
+$effect(() => {
+  if (currentDate !== undefined) {
+    internalCurrentDate = currentDate;
+  }
+});
+
+// ===== 既定ハンドラ =====
+function defaultHandleItemMove(item: CalendarItem, newStart: DateTime, newEnd: DateTime) {
+  internalItems = internalItems.map(i => {
+    if (i.id !== item.id) return i;
+    if (i.temporal.kind === 'CalendarDateRange') {
+      const span = diffDays(i.temporal);
+      const newStartDate = toISODate(newStart.startOf('day'));
+      const newEndDate = toISODate(newStart.startOf('day').plus({ days: span }));
+      return updateAllDayItem(i, { start: newStartDate, endExclusive: newEndDate });
+    }
+    if (i.temporal.kind === 'CalendarDatePoint') {
+      return updatePointItem(i, toISODate(newStart.startOf('day')));
+    }
+    if (i.temporal.kind === 'CalendarDateTimePoint') {
+      return updatePointItem(i, newStart);
+    }
+    return updateTimedItem(i, newStart, newEnd);
+  });
+}
+
+function defaultHandleItemResize(item: CalendarItem, newStart: DateTime, newEnd: DateTime) {
+  internalItems = internalItems.map(i => {
+    if (i.id !== item.id) return i;
+    if (i.temporal.kind === 'CalendarDateRange') {
+      return updateAllDayItem(i, {
+        start: toISODate(newStart.startOf('day')),
+        endExclusive: toISODate(newEnd.startOf('day')),
+      });
+    }
+    return updateTimedItem(i, newStart, newEnd);
+  });
+}
+
+function defaultHandleItemUpdate(updated: CalendarItem) {
+  internalItems = internalItems.map(i => i.id === updated.id ? updated : i);
+}
+
+function defaultHandleItemDelete(id: string) {
+  internalItems = internalItems.filter(i => i.id !== id);
+}
+
+// ===== アイテム操作（既定ハンドラは常に実行、ユーザーコールバックは追加フック） =====
+function handleItemMove(item: CalendarItem, newStart: DateTime, newEnd: DateTime) {
+  defaultHandleItemMove(item, newStart, newEnd);
+  onItemMove?.(item, newStart, newEnd);
+}
+
+function handleItemResize(item: CalendarItem, newStart: DateTime, newEnd: DateTime) {
+  defaultHandleItemResize(item, newStart, newEnd);
+  onItemResize?.(item, newStart, newEnd);
+}
+
 // ===== 編集ダイアログ状態 =====
 let editingItem = $state<CalendarItem | null>(null);
 
@@ -54,11 +126,13 @@ function handleItemDblClick(item: CalendarItem) {
 }
 
 function handleDialogSave(updated: CalendarItem) {
+  defaultHandleItemUpdate(updated);
   onItemUpdate?.(updated);
   editingItem = null;
 }
 
 function handleDialogDelete(id: string) {
+  defaultHandleItemDelete(id);
   onItemDelete?.(id);
   editingItem = null;
 }
@@ -67,6 +141,7 @@ function handleDialogClose() {
   editingItem = null;
 }
 
+// ===== ビュー制御 =====
 function switchToWeek() {
   viewType = 'week';
   onViewTypeChange?.('week');
@@ -77,8 +152,14 @@ function switchToMonth() {
   onViewTypeChange?.('month');
 }
 
+function handleViewChange(date: DateTime) {
+  internalCurrentDate = date;
+  onViewChange?.(date);
+}
+
 function handleDayClick(date: DateTime) {
   viewType = 'week';
+  internalCurrentDate = date;
   onViewChange?.(date);
   onViewTypeChange?.('week');
   onDayClick?.(date);
@@ -105,26 +186,26 @@ function handleDayClick(date: DateTime) {
   <!-- ビュー表示 -->
   {#if viewType === 'week'}
     <WeekView
-      {items}
-      {currentDate}
+      items={internalItems}
+      currentDate={internalCurrentDate}
       {storage}
       {onItemClick}
-      {onItemMove}
-      {onItemResize}
-      {onViewChange}
+      onItemMove={handleItemMove}
+      onItemResize={handleItemResize}
+      onViewChange={handleViewChange}
       {onCellClick}
       {tagStyleMap}
       onItemDblClick={handleItemDblClick}
     />
   {:else}
     <MonthView
-      {items}
-      {currentDate}
+      items={internalItems}
+      currentDate={internalCurrentDate}
       {storage}
       {onItemClick}
-      {onItemMove}
-      {onItemResize}
-      {onViewChange}
+      onItemMove={handleItemMove}
+      onItemResize={handleItemResize}
+      onViewChange={handleViewChange}
       {onCellClick}
       {tagStyleMap}
       onDayClick={handleDayClick}
